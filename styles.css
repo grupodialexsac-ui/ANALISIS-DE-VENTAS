@@ -343,42 +343,71 @@ tr:hover {
 .search-btn:active { transform: scale(0.98); }
 
 /* ==========================================================================
-   DISEÑO ADAPTATIVO (DISPOSITIVOS MÓVILES Y CELULARES)
+   DISEÑO ADAPTATIVO (DISPOSITIVOS MÓVILES Y CELULARES) - CORREGIDO
    ========================================================================== */
 @media (max-width: 768px) {
-    body { flex-direction: column; height: auto; overflow: auto; }
-    #appContainer { flex-direction: column; height: auto; overflow: auto; }
+    body { flex-direction: column; height: auto; overflow-x: hidden; }
+    #appContainer { flex-direction: column; height: auto; overflow-x: hidden; width: 100%; }
 
     .sidebar { width: 100%; height: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .sidebar-header { padding: 12px; font-size: 1rem; }
+    .sidebar-header { padding: 10px; font-size: 0.9rem; }
 
     .vendedores-list {
         display: flex; overflow-x: auto; white-space: nowrap; padding: 10px;
         background-color: #f8f9fa; -webkit-overflow-scrolling: touch; 
     }
     .vendedores-list li {
-        padding: 8px 16px; border-bottom: none; border: 1px solid #dadce0;
-        border-radius: 20px; margin-right: 8px; font-size: 0.85rem;
+        padding: 8px 14px; border-bottom: none; border: 1px solid #dadce0;
+        border-radius: 20px; margin-right: 8px; font-size: 0.8rem;
         background-color: #fff; display: inline-block; flex-shrink: 0;
     }
     .vendedores-list li:hover, .vendedores-list li.active {
         background-color: #e8f0fe; color: #1a73e8; border-color: #1a73e8; font-weight: bold;
     }
 
-    .main-content { padding: 15px; }
-    .header-title { flex-direction: column; align-items: flex-start; gap: 8px; font-size: 1.4rem; padding-bottom: 15px; }
+    /* Corrección del ancho y cortes de texto */
+    .main-content { 
+        padding: 15px; 
+        width: 100vw; 
+        box-sizing: border-box; 
+        overflow-x: hidden; 
+    }
+    .header-title { 
+        flex-direction: column; 
+        align-items: flex-start; 
+        gap: 8px; 
+        font-size: 1.3rem; 
+        padding-bottom: 15px; 
+        word-wrap: break-word;
+        white-space: normal;
+    }
     .tag-tipo { font-size: 0.85rem; padding: 4px 12px; }
 
-    .kpi-box { min-width: 130px; padding: 12px 8px; }
-    .kpi-box h4 { font-size: 0.75rem; }
-    .kpi-box span { font-size: 1.15rem; }
+    /* Nueva Grilla Perfecta para los KPIs en Móvil */
+    .kpi-resumen {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    .kpi-box { 
+        min-width: 0; 
+        width: 100%; 
+        padding: 12px 5px; 
+        box-sizing: border-box;
+    }
+    .kpi-box.destacado {
+        grid-column: span 2; /* El indicador principal ocupa toda la fila superior */
+    }
+    .kpi-box h4 { font-size: 0.7rem; }
+    .kpi-box span { font-size: 1.1rem; }
 
+    /* Ajuste de tarjetas y gráficos */
     .dashboard-grid { grid-template-columns: 1fr; gap: 15px; }
     .card.full-width { grid-column: span 1; }
-    .card { padding: 15px; }
+    .card { padding: 15px; width: 100%; box-sizing: border-box; }
 
-    .speedometer-text { font-size: 1.6rem; }
-    .responsive-chart canvas { height: 240px !important; }
+    .speedometer-text { font-size: 1.4rem; bottom: 8%; }
+    .responsive-chart canvas { height: 260px !important; }
 
     .search-container { flex-direction: column; padding: 15px; }
     .search-btn { width: 100%; }
