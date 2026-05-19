@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Comercial - Dialex</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>App Comercial - Dialex</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -11,24 +11,25 @@
 
     <div id="loginScreen">
         <div class="login-box">
-            <h2>Acceso Privado Dialex</h2>
-            <input type="password" id="passInput" placeholder="Introduce la contraseña" onkeypress="evaluarTeclado(event)">
-            <button onclick="verificarPassword()">Ingresar</button>
-            <div class="error-msg" id="loginError">Contraseña incorrecta. Inténtalo de nuevo.</div>
+            <h2 style="color: white; margin-bottom: 5px;">Dialex</h2>
+            <p style="color: #e8f0fe; margin-top: 0; margin-bottom: 25px;">Acceso Comercial Privado</p>
+            <input type="password" id="passInput" placeholder="Contraseña de acceso" onkeypress="evaluarTeclado(event)">
+            <button onclick="verificarPassword()">Entrar a la App</button>
+            <div class="error-msg" id="loginError">Contraseña incorrecta.</div>
         </div>
     </div>
 
     <div id="loadingScreen">
         <div class="spinner"></div>
-        <h2>Sincronizando con Google Sheets...</h2>
-        <p>Descargando y procesando datos en tiempo real</p>
+        <h2>Sincronizando Nube...</h2>
+        <p>Procesando ventas en tiempo real</p>
     </div>
 
     <div id="modalInactivos" class="modal-overlay">
         <div class="modal-content">
             <span class="modal-close" onclick="cerrarModalInactivos()">&times;</span>
-            <h3 style="color:#ea4335; margin-top:0;">Lista de Clientes Inactivos</h3>
-            <p style="font-size: 0.9rem; color:#5f6368;">Se requiere plan de recuperación para estos contactos.</p>
+            <h3 style="color:#ea4335; margin-top:0;">Clientes Inactivos</h3>
+            <p style="font-size: 0.9rem; color:#5f6368;">Plan de recuperación sugerido.</p>
             <div class="table-wrapper">
                 <table id="tablaInactivos">
                     <thead><tr><th>DNI / RUC</th><th>Razón Social</th></tr></thead>
@@ -40,23 +41,17 @@
 
     <div id="appContainer">
         
-        <aside class="sidebar">
-            <div class="sidebar-header" style="background-color: #0f52ba;">MENÚ PRINCIPAL</div>
-            <ul class="vendedores-list" style="flex: none; border-bottom: 2px solid #e8eaed;">
-                <li id="tabGlobal" class="active" onclick="abrirVistaGlobal()">📊 VISTA GENERAL</li>
-                <li id="tabBusqueda" onclick="abrirVistaBusqueda()">🔍 BÚSQUEDA CLIENTES</li>
-            </ul>
-            
-            <div class="sidebar-header">Equipo de Ventas</div>
-            <ul class="vendedores-list" id="listaVendedores">
-                </ul>
-        </aside>
-
         <main class="main-content">
             
+            <div id="selectorVendedorContainer" style="display: none; margin-bottom: 20px;">
+                <label for="vendedorSelect" style="font-size: 0.9rem; font-weight: bold; color: #5f6368; display: block; margin-bottom: 8px;">Selecciona el Vendedor:</label>
+                <select id="vendedorSelect" class="search-input" onchange="cambiarVendedorSeleccionado()">
+                    </select>
+            </div>
+
             <div id="vistaDashboard">
                 <h1 class="header-title">
-                    <span id="tituloDashboard">Vista General - Mayo 2026</span>
+                    <span id="tituloDashboard">Vista General</span>
                     <span id="tipoVendedorTag" class="tag-tipo">COBERTURA</span>
                 </h1>
                 
@@ -77,28 +72,28 @@
                         </div>
                     </div>
                     <div class="card full-width" id="cardGlobalLinea">
-                        <h3>Comportamiento de Ventas x Días</h3>
+                        <h3>Comportamiento de Ventas Diarias</h3>
                         <div class="chart-container responsive-chart">
                             <canvas id="chartLinea"></canvas>
                         </div>
                     </div>
                     <div class="card full-width" id="cardGlobalRankingMeta">
-                        <h3>Ranking x % de Meta Cumplida (Proyección al 100%)</h3>
+                        <h3>Ranking Equipo (% Cumplimiento)</h3>
                         <div class="chart-container responsive-chart" style="padding-top: 15px;">
                             <canvas id="chartRankingMeta"></canvas>
                         </div>
                     </div>
                     <div class="card" id="cardVendedorProdUnid" style="display:none;">
-                        <h3>Ranking Productos x Unidad</h3>
-                        <div class="table-wrapper"><table id="tablaProdUnid"><thead><tr><th>Producto</th><th class="num-col">Unidades</th></tr></thead><tbody></tbody></table></div>
+                        <h3>Top Productos (Unidades)</h3>
+                        <div class="table-wrapper"><table id="tablaProdUnid"><thead><tr><th>Producto</th><th class="num-col">Unid</th></tr></thead><tbody></tbody></table></div>
                     </div>
                     <div class="card" id="cardVendedorProdCaja" style="display:none;">
-                        <h3>Ranking Productos x Caja</h3>
+                        <h3>Top Productos (Cajas)</h3>
                         <div class="table-wrapper"><table id="tablaProdCaja"><thead><tr><th>Producto</th><th class="num-col">Cajas</th></tr></thead><tbody></tbody></table></div>
                     </div>
                     <div class="card full-width" id="cardVendedorClientes" style="display:none;">
-                        <h3>Ranking de Clientes del Vendedor</h3>
-                        <div class="table-wrapper"><table id="tablaClientesVend"><thead><tr><th>Razón Social</th><th class="num-col">Total Facturado (S/)</th></tr></thead><tbody></tbody></table></div>
+                        <h3>Ranking Clientes del Vendedor</h3>
+                        <div class="table-wrapper"><table id="tablaClientesVend"><thead><tr><th>Razón Social</th><th class="num-col">Facturado (S/)</th></tr></thead><tbody></tbody></table></div>
                     </div>
                 </div>
             </div>
@@ -107,33 +102,48 @@
                 <h1 class="header-title">Inteligencia de Clientes</h1>
                 
                 <div class="search-container">
-                    <input type="text" id="inputBusquedaCliente" class="search-input" list="listaNombresClientes" placeholder="Escribe o selecciona la Razón Social del cliente..." onkeypress="evaluarEnterBusqueda(event)">
+                    <input type="text" id="inputBusquedaCliente" class="search-input" list="listaNombresClientes" placeholder="Nombre o Razón Social..." onkeypress="evaluarEnterBusqueda(event)">
                     <datalist id="listaNombresClientes"></datalist>
-                    <button class="search-btn" onclick="ejecutarBusquedaCliente()">🔍 Analizar Cliente</button>
+                    <button class="search-btn" onclick="ejecutarBusquedaCliente()">🔍 Analizar</button>
                 </div>
 
-                <div class="kpi-resumen" id="kpiBusqueda">
-                    </div>
+                <div class="kpi-resumen" id="kpiBusqueda"></div>
 
                 <div class="dashboard-grid" id="gridResultadosCliente" style="display:none;">
                     <div class="card full-width">
-                        <h3>Comportamiento de Compra en el Tiempo</h3>
+                        <h3>Línea de Tiempo de Compras</h3>
                         <div class="chart-container responsive-chart">
                             <canvas id="chartLineaCliente"></canvas>
                         </div>
                     </div>
                     <div class="card">
-                        <h3>Historial Productos x Caja</h3>
-                        <div class="table-wrapper"><table id="tablaBusquedaCaja"><thead><tr><th>Producto</th><th class="num-col">Cajas Compradas</th></tr></thead><tbody></tbody></table></div>
+                        <h3>Historial de Cajas</h3>
+                        <div class="table-wrapper"><table id="tablaBusquedaCaja"><thead><tr><th>Producto</th><th class="num-col">Cajas</th></tr></thead><tbody></tbody></table></div>
                     </div>
                     <div class="card">
-                        <h3>Historial Productos x Unidad</h3>
-                        <div class="table-wrapper"><table id="tablaBusquedaUnid"><thead><tr><th>Producto</th><th class="num-col">Unid. Compradas</th></tr></thead><tbody></tbody></table></div>
+                        <h3>Historial de Unidades</h3>
+                        <div class="table-wrapper"><table id="tablaBusquedaUnid"><thead><tr><th>Producto</th><th class="num-col">Unid</th></tr></thead><tbody></tbody></table></div>
                     </div>
                 </div>
             </div>
-
+            
         </main>
+
+        <nav class="bottom-nav">
+            <div class="nav-item active" id="navGlobal" onclick="navToGlobal()">
+                <div class="nav-icon">📊</div>
+                <span class="nav-text">General</span>
+            </div>
+            <div class="nav-item" id="navVendedores" onclick="navToVendedores()">
+                <div class="nav-icon">👥</div>
+                <span class="nav-text">Equipo</span>
+            </div>
+            <div class="nav-item" id="navBusqueda" onclick="navToBusqueda()">
+                <div class="nav-icon">🔍</div>
+                <span class="nav-text">Buscar</span>
+            </div>
+        </nav>
+
     </div>
 
     <script src="app.js"></script>
