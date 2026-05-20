@@ -130,7 +130,7 @@ function inicializarColumnas() {
             caja: getColExacto(db.productos[0], ['CANTIDAD CAJA', 'CAJA'])
         },
         clientes: {
-            id: getColExacto(db.clientes[0], ['ID_CLIENTE']), // IDENTIFICADOR MATEMÁTICO MAESTRO
+            id: getColExacto(db.clientes[0], ['ID_CLIENTE']), 
             documento: getColExacto(db.clientes[0], ['Documento_Numero', 'RUC', 'DNI']),
             razon: getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'RAZON SOCIAL', 'NOMBRE']),
             ubicacion: getColExacto(db.clientes[0], ['UBICACIÓN', 'UBICACION', 'DIRECCION']),
@@ -147,9 +147,34 @@ function generarIndices() {
         clientesPorId: {}
     };
 
+    // 1. Crear Diccionario de Auto-Rescate (Documento -> ID_CLIENTE)
+    const docToIdMap = {};
+    db.clientes.forEach(c => {
+        const idC = normalizarTexto(c[COLS.clientes.id]);
+        const doc = normalizarTexto(c[COLS.clientes.documento]);
+        if (idC && doc) docToIdMap[doc] = idC;
+
+        const idV = normalizarTexto(c[COLS.clientes.idVendedor]);
+        if (idV) {
+            if (!cache.clientesPorVendedor[idV]) cache.clientesPorVendedor[idV] = [];
+            cache.clientesPorVendedor[idV].push(c);
+        }
+        if (idC) {
+            cache.clientesPorId[idC] = c;
+        }
+    });
+
+    // 2. Procesar Ventas e inyectar el ID_CLIENTE si falta
     db.ventas.forEach(v => {
         const idV = normalizarTexto(v[COLS.ventas.idVendedor]);
-        const idC = normalizarTexto(v[COLS.ventas.idCliente]);
+        let idC = normalizarTexto(v[COLS.ventas.idCliente]);
+        const doc = normalizarTexto(v[COLS.ventas.documento]);
+
+        // AUTO-RESCATE DE DATOS: Si en ventas falta el ID, lo copiamos de la base de clientes usando el RUC/DNI
+        if (!idC && doc && docToIdMap[doc]) {
+            idC = docToIdMap[doc];
+            v[COLS.ventas.idCliente] = idC; // Mutamos el registro para arreglarlo en memoria
+        }
 
         if (idV) {
             if (!cache.ventasPorVendedor[idV]) cache.ventasPorVendedor[idV] = [];
@@ -161,21 +186,16 @@ function generarIndices() {
         }
     });
 
-    db.clientes.forEach(c => {
-        const idV = normalizarTexto(c[COLS.clientes.idVendedor]);
-        const idC = normalizarTexto(c[COLS.clientes.id]);
-
-        if (idV) {
-            if (!cache.clientesPorVendedor[idV]) cache.clientesPorVendedor[idV] = [];
-            cache.clientesPorVendedor[idV].push(c);
-        }
-        if (idC) {
-            cache.clientesPorId[idC] = c;
-        }
-    });
-
+    // 3. Procesar Productos e inyectar ID_CLIENTE si falta
     db.productos.forEach(p => {
         const idV = normalizarTexto(p[COLS.productos.idVendedor]);
+        let idC = normalizarTexto(p[COLS.productos.idCliente]);
+        const doc = normalizarTexto(p[COLS.productos.documento]);
+
+        if (!idC && doc && docToIdMap[doc]) {
+            p[COLS.productos.idCliente] = docToIdMap[doc];
+        }
+
         if (idV) {
             if (!cache.productosPorVendedor[idV]) cache.productosPorVendedor[idV] = [];
             cache.productosPorVendedor[idV].push(p);
@@ -361,31 +381,39 @@ function inyectarMapaNacional(idContenedorPadre, arrayCliData) {
     }
 }
 
-// NUEVA LÓGICA: USO ESTRICTO DE "MAPS" Y "SETS" PARA NO CONTAR FILAS DUPLICADAS DE ID
+// DOBLE SEGURO DE EVALUACIÓN DE INACTIVOS
 function obtenerInactivosReales(idVendedorFiltro) {
-    const compradoresActivos = new Set(); // Guarda ID únicos que SÍ compraron
+    const compradoresActivos = new Set(); 
 
     db.ventas.forEach(v => {
         const idC = normalizarTexto(v[COLS.ventas.idCliente]);
+        const doc = normalizarTexto(v[COLS.ventas.documento]);
         const idVendVenta = normalizarTexto(v[COLS.ventas.idVendedor]);
-        if (!idC) return;
+
         if (idVendedorFiltro === 'GLOBAL' || idVendVenta === idVendedorFiltro) {
-            compradoresActivos.add(idC);
+            if (idC) compradoresActivos.add(idC);
+            if (doc) compradoresActivos.add(doc); // Salvavidas: guardar el doc también por si el ID falló
         }
     });
 
-    // Usamos un Map para evitar guardar el mismo ID_CLIENTE dos veces si aparece en dos filas
     const inactivosUnicos = new Map(); 
 
     db.clientes.forEach(c => {
         const idCliente = normalizarTexto(c[COLS.clientes.id]);
+        const docCliente = normalizarTexto(c[COLS.clientes.documento]);
         const vendedorDir = normalizarTexto(c[COLS.clientes.idVendedor]);
         
         const pertenece = (idVendedorFiltro === 'GLOBAL') ? true : (vendedorDir === idVendedorFiltro);
-        const noTieneVentas = idCliente && !compradoresActivos.has(idCliente);
+        
+        // Verificamos si compró con su ID_CLIENTE *o* directamente con su RUC/DNI
+        const tieneVentas = (idCliente && compradoresActivos.has(idCliente)) || 
+                            (docCliente && compradoresActivos.has(docCliente));
 
-        if (pertenece && noTieneVentas) {
-            inactivosUnicos.set(idCliente, c); // Si el ID se repite en el Excel, simplemente se sobrescribe en la memoria, no se suma doble
+        if (pertenece && !tieneVentas) {
+            const key = idCliente || docCliente || Math.random().toString();
+            if (!inactivosUnicos.has(key)) {
+                inactivosUnicos.set(key, c); 
+            }
         }
     });
 
@@ -399,7 +427,6 @@ function cargarDataGeneral() {
     const vtaT = db.ventas.reduce((s, v) => s + parseNum(v[COLS.ventas.total]), 0);
     const inactivosGlobales = obtenerInactivosReales('GLOBAL');
 
-    // FILTRO ESTRICTO: Conteo único de clientes totales en la Base de Datos
     const idsUnicosGlobales = new Set();
     db.clientes.forEach(c => {
         const idC = normalizarTexto(c[COLS.clientes.id]);
@@ -407,7 +434,6 @@ function cargarDataGeneral() {
     });
     const clientesTotalesBase = idsUnicosGlobales.size; 
     
-    // VIP basado ESTRICTAMENTE en ID_CLIENTE
     const vtasPorIdCli = {};
     db.ventas.forEach(v => {
         const idC = normalizarTexto(v[COLS.ventas.idCliente]);
@@ -498,7 +524,6 @@ function cargarDataVendedor(vdData) {
 
     const totV = ventasVendedor.reduce((s, v) => s + parseNum(v[COLS.ventas.total]), 0);
     
-    // FILTRO ESTRICTO: Conteo único de clientes del vendedor
     const idsUnicosVendedor = new Set();
     clientesVendedor.forEach(c => {
         const idC = normalizarTexto(c[COLS.clientes.id]);
@@ -588,7 +613,6 @@ function cargarDataVendedor(vdData) {
     renderTable('tablaProdUnid', cU);
     renderTable('tablaProdCaja', cC);
     
-    // Obtenemos los clientes únicos para pintarlos en el mapa sin sobrecargar pines iguales
     const arrayUnicoMapaVend = Array.from(new Map(clientesVendedor.map(c => [normalizarTexto(c[COLS.clientes.id]), c])).values());
     inyectarMapaNacional('ContenedorMapaVendedor', arrayUnicoMapaVend);
 }
@@ -641,7 +665,7 @@ function cargarDataSituacion() {
     db.clientes.forEach(c => {
         const idC = normalizarTexto(c[COLS.clientes.id]);
         if(idC && cache.ventasPorIdCliente[idC]) {
-            mapActivosSegmento.set(idC, c); // Aseguramos no enviar pines duplicados
+            mapActivosSegmento.set(idC, c); 
         }
     });
 
@@ -654,7 +678,6 @@ function buscarAutocompleteCliente(texto) {
     
     if (texto.length < 2) { ul.style.display = 'none'; return; }
     
-    // Evitar sugerencias duplicadas en visualización usando un Map
     const resultadosUnicos = new Map();
     
     for(let i = 0; i < db.clientes.length; i++) {
@@ -768,18 +791,13 @@ function mostrarModalInactivos(idVendedor, nombreVendedor) {
 
     const clientesInactivos = obtenerInactivosReales(idVendedor);
 
-    const docC = COLS.clientes.documento;
-    const razC = COLS.clientes.razon;
-    const estC = COLS.clientes.estado;
-
     if (clientesInactivos.length === 0) {
         tb.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:#666;">¡Felicidades! Toda la cartera registra compras efectivas.</td></tr>`;
     } else {
         const frag = document.createDocumentFragment();
         clientesInactivos.forEach(c => {
-            const est = c[estC] || 'INACTIVO';
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${c[docC] || '---'}</td><td>${c[razC] || '---'}</td><td><span class="badge badge-inactivo">${est}</span></td>`;
+            tr.innerHTML = `<td>${c[COLS.clientes.documento] || '---'}</td><td>${c[COLS.clientes.razon] || '---'}</td><td><span class="badge badge-inactivo">0 TRANSACCIONES</span></td>`;
             frag.appendChild(tr);
         });
         tb.appendChild(frag);
