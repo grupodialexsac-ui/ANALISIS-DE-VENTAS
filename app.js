@@ -4,7 +4,9 @@ const urls = {
     productos: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ70FuTF7cerHOQSNXrIcLFDFRprfHAV728CeKLsmNZdlxq3rA_SunZ6ILxYFtZVHVfQdphUycfNbUC/pub?gid=1241891503&single=true&output=csv',
     clientes: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ70FuTF7cerHOQSNXrIcLFDFRprfHAV728CeKLsmNZdlxq3rA_SunZ6ILxYFtZVHVfQdphUycfNbUC/pub?gid=1344644608&single=true&output=csv'
 };
-// ... [ Mantén tus URLs igual ] ...
+
+let db = { vendedores: [], ventas: [], productos: [], clientes: [] };
+let graficos = { genV: null, genD: null, genL: null, genR: null, vendV: null, vendD: null, cliL: null };
 let charts = {}; // Contenedor global de instancias para destruirlas antes de crear
 
 function destroyChart(id) {
@@ -13,29 +15,6 @@ function destroyChart(id) {
         charts[id] = null;
     }
 }
-
-// Ejemplo de cómo dibujar un gráfico sin que "clashee"
-function dibujarVelocimetro(idCanvas, porcentaje) {
-    destroyChart(idCanvas); // DESTRUCCIÓN ANTES DE CREACIÓN
-    const ctx = document.getElementById(idCanvas).getContext('2d');
-    charts[idCanvas] = new Chart(ctx, {
-        type: 'doughnut',
-        data: { datasets: [{ data: [porcentaje, 100-porcentaje], backgroundColor: ['#34a853', '#ddd'] }] },
-        options: { responsive: true, maintainAspectRatio: false, rotation: -90, circumference: 180, cutout: '70%' }
-    });
-}
-
-// Función que corrige el selector de vendedores para que no ocupe espacio
-function cambiarModulo(modulo, el) {
-    document.querySelectorAll('.modulos-list li').forEach(l => l.classList.remove('active'));
-    if(el) el.classList.add('active');
-    
-    document.getElementById('selectorVendedorMobile').style.display = (modulo === 'productividad') ? 'block' : 'none';
-    
-    // ... [ RESTO DE TU LÓGICA ] ...
-}
-let db = { vendedores: [], ventas: [], productos: [], clientes: [] };
-let graficos = { genV: null, genD: null, genL: null, genR: null, vendV: null, vendD: null, cliL: null };
 
 // =========================================
 // UTILIDADES NORMALIZADORAS Y FECHAS
@@ -93,7 +72,7 @@ async function inicializarApp() {
 }
 
 // =========================================
-// CONTROLADOR DE PESTAÑAS (ANTI BUGS)
+// CONTROLADOR DE PESTAÑAS
 // =========================================
 function cambiarModulo(modulo, elemento) {
     document.querySelectorAll('.modulos-list li').forEach(el => el.classList.remove('active'));
@@ -143,18 +122,18 @@ function generarMenuVendedores() {
 }
 
 // =========================================
-// MAPA A NIVEL NACIONAL CON ZOOM INTELIGENTE
+// MAPA NACIONAL
 // =========================================
 function inyectarMapaNacional(idContenedorPadre, arrayCliData) {
     let padre = document.getElementById(idContenedorPadre);
-    padre.innerHTML = ''; // Elimina la capa rota anterior de Leaflet
+    if (!padre) return;
+    padre.innerHTML = ''; 
     
     let nDiv = document.createElement('div');
     nDiv.id = idContenedorPadre + '_interno';
     nDiv.style.width = '100%'; nDiv.style.height = '100%'; nDiv.style.borderRadius = '8px'; nDiv.style.zIndex = '1';
     padre.appendChild(nDiv);
 
-    // Centro inicial: Todo el Perú
     let map = L.map(nDiv.id).setView([-9.189967, -75.015152], 5);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: 'Dialex' }).addTo(map);
 
@@ -162,7 +141,6 @@ function inyectarMapaNacional(idContenedorPadre, arrayCliData) {
     let vId = getColExacto(db.ventas[0], ['ID_CLIENTE']); let vPr = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']);
     let mapVentas = {}; db.ventas.forEach(v => { let i = normalizarTexto(v[vId]); if(i) mapVentas[i] = (mapVentas[i]||0) + parseNum(v[vPr]); });
 
-    // Diccionario Geográfico Nacional del Perú + Lima
     const dicZonas = {
         'AREQUIPA':[-16.40,-71.53], 'CUSCO':[-13.53,-71.96], 'TRUJILLO':[-8.10,-79.02], 'CHICLAYO':[-6.77,-79.84], 'PIURA':[-5.19,-80.62], 
         'IQUITOS':[-3.74,-73.25], 'HUANCAYO':[-12.06,-75.20], 'TACNA':[-18.01,-70.25], 'CAJAMARCA':[-7.16,-78.51], 'PUNO':[-15.84,-70.02], 
@@ -175,10 +153,9 @@ function inyectarMapaNacional(idContenedorPadre, arrayCliData) {
 
     arrayCliData.forEach(c => {
         let id = normalizarTexto(c[cId]); let raz = c[cRz]||'Desc'; let ubi = normalizarTexto(c[cUb]); let vnt = mapVentas[id]||0;
-        let coord = dicZonas['LIMA']; // Por defecto Lima si no hay match
+        let coord = dicZonas['LIMA']; 
         for(let z in dicZonas) { if(ubi.includes(z)) { coord = dicZonas[z]; break; } }
         
-        // Dispersión espiral para que clientes de un mismo distrito no se tapen en el mapa
         let rad = Math.random() * 0.04; let ang = Math.random() * Math.PI * 2;
         let lat = coord[0] + (Math.sin(ang) * rad); let lng = coord[1] + (Math.cos(ang) * rad);
 
@@ -191,7 +168,6 @@ function inyectarMapaNacional(idContenedorPadre, arrayCliData) {
     });
     
     marcadores.addTo(map);
-    // Zoom inteligente automático hacia donde haya clientes, tope de zoom en 12 para no ver las calles difuminadas
     if(arrayCliData.length > 0) map.fitBounds(marcadores.getBounds(), {padding: [30, 30], maxZoom: 12});
     setTimeout(() => { map.invalidateSize(); }, 300);
 }
@@ -210,7 +186,9 @@ function cargarDataGeneral() {
 
     if(graficos.genV) graficos.genV.destroy();
     graficos.genV = new Chart(document.getElementById('chartVelocimetroGeneral').getContext('2d'), { type:'doughnut', data:{datasets:[{data:[vtaT, Math.max(0,metaT-vtaT)], backgroundColor:['#34a853','#ea4335'], borderWidth:0}]}, options:{responsive:true, maintainAspectRatio:false, rotation:-90, circumference:180, cutout:'75%', plugins:{legend:{display:false}}} });
-    document.getElementById('textoVelocimetroGeneral').textContent = (metaT>0?(vtaT/metaT)*100:0).toFixed(1)+'%';
+    
+    let txtVelocimetro = document.getElementById('textoVelocimetroGeneral');
+    if(txtVelocimetro) txtVelocimetro.textContent = (metaT>0?(vtaT/metaT)*100:0).toFixed(1)+'%';
 
     let can = {'CALL CENTER':0, 'COBERTURA':0};
     db.ventas.forEach(v => {
@@ -236,15 +214,17 @@ function cargarDataGeneral() {
         let tot = db.ventas.filter(vt=>normalizarTexto(vt[vtColIdV])===normalizarTexto(v[vColIdV])).reduce((s,vt)=>s+parseNum(vt[vtColP]),0);
         return {n:v[getColExacto(v,['NOMBRE'])], p:(tot/parseNum(v[vColM]))*100};
     }).sort((a,b)=>b.p-a.p);
+    
     if(graficos.genR) graficos.genR.destroy();
-    graficos.genR = new Chart(document.getElementById('chartRankingMeta').getContext('2d'), { type:'bar', data:{labels:rank.map(r=>r.n), datasets:[{label:'Avance %', data:rank.map(r=>Math.min(r.p,100)), backgroundColor:'#4285f4'}]}, options:{responsive:true, maintainAspectRatio:false} });
+    let ctxRanking = document.getElementById('chartRankingMeta');
+    if(ctxRanking) {
+        graficos.genR = new Chart(ctxRanking.getContext('2d'), { type:'bar', data:{labels:rank.map(r=>r.n), datasets:[{label:'Avance %', data:rank.map(r=>Math.min(r.p,100)), backgroundColor:'#4285f4'}]}, options:{responsive:true, maintainAspectRatio:false} });
+    }
 
     inyectarMapaNacional('ContenedorMapaGeneral', db.clientes);
 }
 
 function cargarDataVendedor(vdData) {
-    document.getElementById('estadoVendedorSeleccion').style.display = 'none';
-    document.getElementById('contenidoProductividad').style.display = 'block';
     document.getElementById('tituloDashboard').textContent = `Análisis: ${vdData[getColExacto(vdData, ['NOMBRE'])]}`;
     
     let idV = normalizarTexto(vdData[getColExacto(vdData, ['ID_VENDEDOR'])]);
@@ -258,7 +238,9 @@ function cargarDataVendedor(vdData) {
 
     if(graficos.vendV) graficos.vendV.destroy();
     graficos.vendV = new Chart(document.getElementById('chartVelocimetroVendedor').getContext('2d'), { type:'doughnut', data:{datasets:[{data:[totV, Math.max(0,m-totV)], backgroundColor:['#34a853','#ea4335'], borderWidth:0}]}, options:{responsive:true, maintainAspectRatio:false, rotation:-90, circumference:180, cutout:'75%', plugins:{legend:{display:false}}} });
-    document.getElementById('textoVelocimetroVendedor').textContent = (m>0?(totV/m)*100:0).toFixed(1)+'%';
+    
+    let txtVelVend = document.getElementById('textoVelocimetroVendedor');
+    if (txtVelVend) txtVelVend.textContent = (m>0?(totV/m)*100:0).toFixed(1)+'%';
 
     if(graficos.vendD) graficos.vendD.destroy();
     graficos.vendD = new Chart(document.getElementById('chartDonaVendedor').getContext('2d'), { type:'pie', data:{labels:['Logrado','Faltante'], datasets:[{data:[totV, Math.max(0,m-totV)], backgroundColor:['#4285f4','#ea4335']}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}} });
@@ -270,7 +252,19 @@ function cargarDataVendedor(vdData) {
         if(n){ if(u>0) cU[n]=(cU[n]||0)+u; if(c>0) cC[n]=(cC[n]||0)+c; }
     });
     
-    const fillTb = (id, obj) => { let tb=document.querySelector(`#${id} tbody`); tb.innerHTML=''; let keys = Object.keys(obj).sort((a,b)=>obj[b]-obj[a]).slice(0,5); if(keys.length===0){tb.innerHTML=`<tr><td colspan="2" style="text-align:center;">Sin datos</td></tr>`;} else{keys.forEach(k=>tb.innerHTML+=`<tr><td>${k}</td><td class="num-col">${obj[k].toLocaleString()}</td></tr>`);} };
+    const fillTb = (id, obj) => { 
+        let tb=document.querySelector(`#${id} tbody`); 
+        if(!tb) return;
+        tb.innerHTML=''; 
+        let keys = Object.keys(obj).sort((a,b)=>obj[b]-obj[a]).slice(0,5); 
+        if(keys.length===0){
+            tb.innerHTML=`<tr><td colspan="2" style="text-align:center;">Sin datos</td></tr>`;
+        } else {
+            let trs = '';
+            keys.forEach(k=>{ trs+=`<tr><td>${k}</td><td class="num-col">${obj[k].toLocaleString()}</td></tr>`; });
+            tb.innerHTML = trs;
+        } 
+    };
     fillTb('tablaProdUnid', cU); fillTb('tablaProdCaja', cC);
 
     inyectarMapaNacional('ContenedorMapaVendedor', sCli);
@@ -290,28 +284,39 @@ function cargarDataSituacion() {
     document.getElementById('kpiRiesgo').textContent = rsg;
 
     let arr = Object.keys(cC).map(k=>({n:k, t:cC[k]})).sort((a,b)=>b.t-a.t);
-    let tb = document.querySelector('#tablaABC tbody'); tb.innerHTML=''; let sAc=0;
-    arr.forEach(c=>{ sAc+=c.t; let pct=(sAc/vT)*100; let sg=pct<=80?'A (Top)':(pct<=95?'B (Medio)':'C (Bajo)'); let cs=pct<=80?'badge-a':(pct<=95?'badge-b':'badge-c'); tb.innerHTML+=`<tr><td>${c.n}</td><td><span class="badge ${cs}">${sg}</span></td><td class="num-col">${formatearMoneda(c.t)}</td></tr>`; });
+    let tb = document.querySelector('#tablaABC tbody'); 
+    
+    let sAc=0;
+    let filasHTML = ''; // Optimizacion: Evita parpadeos y lentitud
+    arr.forEach(c=>{ 
+        sAc+=c.t; let pct=(sAc/vT)*100; 
+        let sg=pct<=80?'A (Top)':(pct<=95?'B (Medio)':'C (Bajo)'); 
+        let cs=pct<=80?'badge-a':(pct<=95?'badge-b':'badge-c'); 
+        filasHTML += `<tr><td>${c.n}</td><td><span class="badge ${cs}">${sg}</span></td><td class="num-col">${formatearMoneda(c.t)}</td></tr>`; 
+    });
+    tb.innerHTML = filasHTML;
 
     inyectarMapaNacional('ContenedorMapaSituacion', clAct);
 }
 
 // =========================================
-// BÚSQUEDA AVANZADA CON AUTO-SCROLL MÓVIL
+// BÚSQUEDA AVANZADA 
 // =========================================
 function llenarTablaDirectorio() {
-    let tb = document.querySelector('#tablaDirectorioClientes tbody'); tb.innerHTML='';
+    let tb = document.querySelector('#tablaDirectorioClientes tbody'); 
+    if(!tb) return;
+    
     let docC = getColExacto(db.clientes[0], ['Documento_Numero', 'RUC', 'DNI']); let razC = getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'NOMBRE']);
+    let filasHTML = ''; // Optimizacion
     
     db.clientes.forEach(c=>{
         let d = c[docC]||''; let r = c[razC]||'';
         if(d || r) {
-            let tr = document.createElement('tr'); tr.className = 'fila-cliente';
-            tr.innerHTML = `<td>${d}</td><td>${r}</td>`;
-            tr.onclick = () => mostrarDetalleCliente(d, r, tr);
-            tb.appendChild(tr);
+            let rowStr = `<tr class="fila-cliente" onclick="mostrarDetalleCliente('${d}', '${r}', this)"><td>${d}</td><td>${r}</td></tr>`;
+            filasHTML += rowStr;
         }
     });
+    tb.innerHTML = filasHTML;
 }
 
 function filtrarDirectorioClientes() {
@@ -326,7 +331,6 @@ function mostrarDetalleCliente(doc, razon, trActivo) {
     let panel = document.getElementById('panelDetalleCliente');
     panel.style.display = 'flex'; panel.style.flexDirection = 'column';
     
-    // Auto-Scroll suave en dispositivos móviles para no despistar al vendedor
     if (window.innerWidth <= 1024) { panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     
     document.getElementById('detalleNombreCliente').textContent = razon || 'Desconocido';
@@ -354,18 +358,30 @@ function mostrarDetalleCliente(doc, razon, trActivo) {
         if(n){ if(!prds[n]) prds[n]={u:0,c:0}; prds[n].u+=u; prds[n].c+=c; }
     });
     
-    let tb = document.querySelector('#tablaClienteProductos tbody'); tb.innerHTML='';
+    let tb = document.querySelector('#tablaClienteProductos tbody'); 
     let keysPrd = Object.keys(prds).sort((a,b)=>(prds[b].u+prds[b].c)-(prds[a].u+prds[a].c));
-    if(keysPrd.length===0) { tb.innerHTML=`<tr><td colspan="2" style="text-align:center">Sin productos registrados en BD</td></tr>`; }
-    else { keysPrd.forEach(k=>{ let sumStr = prds[k].c>0 ? `${prds[k].c} cjs` : `${prds[k].u} und`; tb.innerHTML+=`<tr><td>${k}</td><td class="num-col">${sumStr}</td></tr>`; }); }
+    let filasProd = ''; // Optimizacion
+    
+    if(keysPrd.length===0) { 
+        filasProd = `<tr><td colspan="2" style="text-align:center">Sin productos registrados en BD</td></tr>`; 
+    } else { 
+        keysPrd.forEach(k=>{ 
+            let sumStr = prds[k].c>0 ? `${prds[k].c} cjs` : `${prds[k].u} und`; 
+            filasProd += `<tr><td>${k}</td><td class="num-col">${sumStr}</td></tr>`; 
+        }); 
+    }
+    tb.innerHTML = filasProd;
 }
 
 function mostrarModalInactivos(idVendedor) { 
-    let tb = document.querySelector('#tablaInactivos tbody'); tb.innerHTML = '';
+    let tb = document.querySelector('#tablaInactivos tbody'); 
+    let htmlContent = '';
     db.clientes.filter(c => normalizarTexto(c[getColExacto(c,['ID_VENDEDOR'])]) === normalizarTexto(idVendedor)).forEach(c => {
         let est = normalizarTexto(c[getColExacto(c,['ESTADO DE VENTA'])]);
-        tb.innerHTML += `<tr><td>${c[getColExacto(c,['Documento_Numero'])]||''}</td><td>${c[getColExacto(c,['RAZÓN SOCIAL'])]||''}</td><td><span class="badge ${est.includes('ACTIVO')?'badge-activo':'badge-inactivo'}">${est}</span></td></tr>`;
+        htmlContent += `<tr><td>${c[getColExacto(c,['Documento_Numero'])]||''}</td><td>${c[getColExacto(c,['RAZÓN SOCIAL'])]||''}</td><td><span class="badge ${est.includes('ACTIVO')?'badge-activo':'badge-inactivo'}">${est}</span></td></tr>`;
     });
+    tb.innerHTML = htmlContent;
     document.getElementById('modalInactivos').style.display = 'flex'; 
 }
+
 function cerrarModalInactivos() { document.getElementById('modalInactivos').style.display = 'none'; }
