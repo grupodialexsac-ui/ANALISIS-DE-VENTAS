@@ -113,3 +113,31 @@ tr:hover { background-color: #f8f9fa; }
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: none; justify-content: center; align-items: center; }
 .modal-content { background: white; padding: 25px; border-radius: 12px; width: 95%; max-width: 800px; max-height: 85vh; display: flex; flex-direction: column;}
 .modal-close { float: right; cursor: pointer; font-size: 2rem; font-weight: bold; color: #5f6368; line-height: 1; padding: 5px; align-self: flex-end;}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: sans-serif; background: #f1f3f4; height: 100vh; display: flex; overflow: hidden; }
+
+/* Corrección de desborde */
+.kpi-resumen { display: flex; gap: 10px; width: 100%; flex-wrap: wrap; }
+.kpi-box { background: white; padding: 15px; border-radius: 8px; flex: 1 1 140px; text-align: center; border: 1px solid #ddd; }
+.kpi-box span { display: block; font-size: 1.2rem; font-weight: bold; color: #1a73e8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; padding-bottom: 50px; }
+.card { background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; min-height: 250px; }
+.full-width { grid-column: 1 / -1; }
+
+.chart-container { position: relative; width: 100%; height: 200px; display: flex; align-items: center; justify-content: center; }
+.speed-text { position: absolute; font-size: 1.5rem; font-weight: bold; }
+
+/* Tablas robustas */
+.table-wrapper { width: 100%; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+td { padding: 8px; border-bottom: 1px solid #eee; word-break: break-word; }
+
+/* Responsive móvil total */
+@media (max-width: 768px) {
+    body { flex-direction: column; overflow-y: auto; }
+    .sidebar { width: 100%; height: auto; padding: 10px; }
+    .dashboard-grid { grid-template-columns: 1fr; }
+    .split-layout { flex-direction: column; }
+    .split-right { position: static; }
+}
