@@ -6,51 +6,28 @@ const urls = {
 };
 
 let db = { vendedores: [], ventas: [], productos: [], clientes: [] };
-let graficos = {
-    veloGen: null, donaGen: null, lineaGen: null, rankGen: null,
-    veloVend: null, donaVend: null
-};
-let mapasActivos = { general: null, vendedor: null, situacion: null };
-let moduloActual = 'general';
+let graficos = { genV: null, genD: null, genL: null, genR: null, vendV: null, vendD: null, cliL: null };
 
 // =========================================
-// UTILIDADES ROBUSTAS
+// UTILIDADES NORMALIZADORAS Y FECHAS
 // =========================================
-function normalizarTexto(texto) { return texto ? String(texto).replace(/\s+/g, ' ').trim().toUpperCase() : ''; }
-
+function normalizarTexto(t) { return t ? String(t).replace(/\s+/g, ' ').trim().toUpperCase() : ''; }
 function getColExacto(obj, opciones) {
     if(!obj) return null;
     let keys = Object.keys(obj);
-    for (let op of opciones) {
-        let opLimpio = normalizarTexto(op);
-        let encontrado = keys.find(k => normalizarTexto(k) === opLimpio);
-        if(encontrado) return encontrado;
-    }
-    for (let op of opciones) {
-        let opLimpio = normalizarTexto(op);
-        let encontrado = keys.find(k => normalizarTexto(k).includes(opLimpio));
-        if(encontrado) return encontrado;
-    }
+    for (let op of opciones) { let opL = normalizarTexto(op); let found = keys.find(k => normalizarTexto(k) === opL); if(found) return found; }
+    for (let op of opciones) { let opL = normalizarTexto(op); let found = keys.find(k => normalizarTexto(k).includes(opL)); if(found) return found; }
     return keys[0]; 
 }
+function parseNum(val) { let num = parseFloat(String(val||'').replace(/,/g, '')); return isNaN(num) ? 0 : num; }
+function formatearMoneda(val) { return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(val); }
 
-function parseNum(val) {
-    if (!val) return 0;
-    let num = parseFloat(String(val).replace(/,/g, ''));
-    return isNaN(num) ? 0 : num;
-}
-
-function formatearMoneda(valor) { return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(valor); }
-
-// Parseo estricto de fechas (Arreglo del Gráfico de Líneas)
 function parseFechaEstricta(dStr) {
-    if(!dStr) return 0;
-    let parts = String(dStr).split(' ')[0].split('/'); // Elimina horas si las hay
-    if(parts.length !== 3) return 0;
-    let day = parts[0].padStart(2, '0');
-    let month = parts[1].padStart(2, '0');
-    let year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
-    return new Date(`${year}-${month}-${day}T12:00:00`).getTime();
+    if(!dStr) return null;
+    let parts = String(dStr).split(' ')[0].split('/');
+    if(parts.length !== 3) return null;
+    let day = parts[0].padStart(2, '0'); let month = parts[1].padStart(2, '0'); let year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+    return { string: `${day}/${month}`, sortValue: new Date(`${year}-${month}-${day}T12:00:00`).getTime() };
 }
 
 function cargarCSV(url) {
@@ -64,11 +41,10 @@ function cargarCSV(url) {
 // =========================================
 function evaluarTeclado(e) { if (e.key === 'Enter') verificarPassword(); }
 function verificarPassword() {
-    const pass = document.getElementById('passInput').value;
-    if (btoa(pass) === "RGlhbGV4MTIz") {
+    if (btoa(document.getElementById('passInput').value) === "RGlhbGV4MTIz") {
         document.getElementById('loginScreen').style.opacity = '0';
         setTimeout(() => { document.getElementById('loginScreen').style.display = 'none'; document.getElementById('loadingScreen').style.display = 'flex'; inicializarApp(); }, 300);
-    } else { document.getElementById('loginError').style.display = 'block'; }
+    } else document.getElementById('loginError').style.display = 'block';
 }
 
 async function inicializarApp() {
@@ -77,19 +53,18 @@ async function inicializarApp() {
         db.vendedores = resVend; db.ventas = resVent; db.productos = resProd; db.clientes = resCli;
         
         generarMenuVendedores();
-        cambiarModulo('general', document.getElementById('btnModGeneral'));
-        
+        cambiarModulo('general', document.querySelector('.modulos-list li.active'));
         document.getElementById('loadingScreen').style.display = 'none';
         document.getElementById('appContainer').style.visibility = 'visible';
-    } catch (error) { 
-        document.getElementById('loadingSpinner').style.display = 'none';
-        document.getElementById('loadingTitle').style.color = '#d93025';
-        document.getElementById('loadingTitle').textContent = "Error al descargar Datos";
+    } catch (e) { 
+        document.getElementById('loadingSpinner').style.display = 'none'; 
+        document.getElementById('loadingTitle').textContent = "Error en Red"; 
+        document.getElementById('loadingTitle').style.color = '#d93025'; 
     }
 }
 
 // =========================================
-// NAVEGACIÓN Y MENÚS
+// CONTROLADOR DE PESTAÑAS (ANTI BUGS)
 // =========================================
 function cambiarModulo(modulo, elemento) {
     document.querySelectorAll('.modulos-list li').forEach(el => el.classList.remove('active'));
@@ -98,32 +73,25 @@ function cambiarModulo(modulo, elemento) {
     document.querySelectorAll('.modulo-view').forEach(el => el.style.display = 'none');
     document.getElementById('menuVendedoresContainer').style.display = 'none';
     
-    moduloActual = modulo;
-
     if (modulo === 'general') {
         document.getElementById('vistaGeneral').style.display = 'block';
         document.getElementById('tituloDashboard').textContent = 'Vista General Comercial';
         cargarDataGeneral();
-    } 
-    else if (modulo === 'productividad') {
+    } else if (modulo === 'productividad') {
         document.getElementById('vistaProductividad').style.display = 'block';
-        document.getElementById('menuVendedoresContainer').style.display = 'block';
+        document.getElementById('menuVendedoresContainer').style.display = 'flex';
         document.getElementById('tituloDashboard').textContent = 'Análisis de Productividad';
         
-        // Cargar el primer vendedor por defecto si no hay uno seleccionado
-        let primerVendedorBtn = document.querySelector('#listaVendedoresHorizontal li');
-        if(primerVendedorBtn && document.getElementById('estadoVendedorSeleccion').style.display !== 'none') {
-            primerVendedorBtn.click();
-        }
-    }
-    else if (modulo === 'situacion') {
+        let actLi = document.querySelector('#listaVendedoresHorizontal li.active');
+        if(!actLi) { let pV = document.querySelector('#listaVendedoresHorizontal li'); if(pV) pV.click(); } 
+        else { actLi.click(); }
+    } else if (modulo === 'situacion') {
         document.getElementById('vistaSituacion').style.display = 'block';
         document.getElementById('tituloDashboard').textContent = 'Estrategia de Rentabilidad';
         cargarDataSituacion();
-    }
-    else if (modulo === 'busqueda') {
+    } else if (modulo === 'busqueda') {
         document.getElementById('vistaBusqueda').style.display = 'block';
-        document.getElementById('tituloDashboard').textContent = 'Directorio Corporativo';
+        document.getElementById('tituloDashboard').textContent = 'Directorio Analítico';
         llenarTablaDirectorio();
     }
 }
@@ -131,15 +99,11 @@ function cambiarModulo(modulo, elemento) {
 function generarMenuVendedores() {
     const lista = document.getElementById('listaVendedoresHorizontal');
     lista.innerHTML = '';
-    let colMeta = getColExacto(db.vendedores[0], ['META']);
-    let colNom = getColExacto(db.vendedores[0], ['NOMBRE']);
-    let colApe = getColExacto(db.vendedores[0], ['APELLIDO']);
-
-    const activos = db.vendedores.filter(v => parseNum(v[colMeta]) > 0 && normalizarTexto(v[colNom]) !== "RETIRADO");
+    let cM = getColExacto(db.vendedores[0], ['META']); let cN = getColExacto(db.vendedores[0], ['NOMBRE']); let cA = getColExacto(db.vendedores[0], ['APELLIDO']);
     
-    activos.forEach(v => {
+    db.vendedores.filter(v => parseNum(v[cM]) > 0 && normalizarTexto(v[cN]) !== "RETIRADO").forEach(v => {
         const li = document.createElement('li');
-        li.textContent = `${v[colNom]} ${v[colApe] || ''}`.trim();
+        li.textContent = `${v[cN]} ${v[cA] || ''}`.trim();
         li.onclick = () => {
             document.querySelectorAll('#listaVendedoresHorizontal li').forEach(el => el.classList.remove('active'));
             li.classList.add('active');
@@ -150,307 +114,229 @@ function generarMenuVendedores() {
 }
 
 // =========================================
-// RENDERIZADO DE VISTAS (Lógica Matemática)
+// MAPA A NIVEL NACIONAL CON ZOOM INTELIGENTE
 // =========================================
-
-// --- VISTA 1: GENERAL ---
-function cargarDataGeneral() {
-    let vColMeta = getColExacto(db.vendedores[0], ['META']);
-    let ventColPrecio = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']);
-    let ventColFecha = getColExacto(db.ventas[0], ['FECHA DE VENTA', 'FECHA']);
-    let colIdCli = getColExacto(db.clientes[0], ['ID_CLIENTE', 'CLIENTE']);
+function inyectarMapaNacional(idContenedorPadre, arrayCliData) {
+    let padre = document.getElementById(idContenedorPadre);
+    padre.innerHTML = ''; // Elimina la capa rota anterior de Leaflet
     
-    let metaTotal = db.vendedores.reduce((sum, v) => sum + parseNum(v[vColMeta]), 0);
-    let ventaTotal = db.ventas.reduce((sum, v) => sum + parseNum(v[ventColPrecio]), 0);
-    let totalClientes = new Set(db.clientes.map(c => c[colIdCli])).size;
-    let pctGlobal = metaTotal > 0 ? (ventaTotal / metaTotal) * 100 : 0;
+    let nDiv = document.createElement('div');
+    nDiv.id = idContenedorPadre + '_interno';
+    nDiv.style.width = '100%'; nDiv.style.height = '100%'; nDiv.style.borderRadius = '8px'; nDiv.style.zIndex = '1';
+    padre.appendChild(nDiv);
 
-    document.getElementById('kpiGeneral').innerHTML = `
-        <div class="kpi-box"><h4>Venta Total</h4><span>${formatearMoneda(ventaTotal)}</span></div>
-        <div class="kpi-box"><h4>Meta General</h4><span style="color:#333;">${formatearMoneda(metaTotal)}</span></div>
-        <div class="kpi-box"><h4>Total Clientes BD</h4><span style="color:#333;">${totalClientes}</span></div>
-    `;
+    // Centro inicial: Todo el Perú
+    let map = L.map(nDiv.id).setView([-9.189967, -75.015152], 5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: 'Dialex' }).addTo(map);
 
-    // Gráficos Circulares
-    if(graficos.veloGen) graficos.veloGen.destroy();
-    graficos.veloGen = new Chart(document.getElementById('chartVelocimetroGeneral').getContext('2d'), { type: 'doughnut', data: { datasets: [{ data: [pctGlobal, Math.max(0,100-pctGlobal)], backgroundColor: ['#34a853', '#ea4335'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, rotation: -90, circumference: 180, cutout: '75%', plugins:{legend:{display:false}} } });
-    document.getElementById('textoVelocimetroGeneral').textContent = pctGlobal.toFixed(1) + '%';
+    let cId = getColExacto(db.clientes[0], ['ID_CLIENTE']); let cRz = getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'NOMBRE']); let cUb = getColExacto(db.clientes[0], ['UBICACIÓN', 'DIRECCION']);
+    let vId = getColExacto(db.ventas[0], ['ID_CLIENTE']); let vPr = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']);
+    let mapVentas = {}; db.ventas.forEach(v => { let i = normalizarTexto(v[vId]); if(i) mapVentas[i] = (mapVentas[i]||0) + parseNum(v[vPr]); });
 
-    let vColIdVend = getColExacto(db.vendedores[0], ['ID_VENDEDOR', 'VENDEDOR']);
-    let ventColIdVend = getColExacto(db.ventas[0], ['ID_VENDEDOR', 'VENDEDOR']);
-    let vColTipo = getColExacto(db.vendedores[0], ['TIPO', 'TIPO DE VENDEDOR']);
-    let canales = { 'CALL CENTER': 0, 'COBERTURA': 0 };
+    // Diccionario Geográfico Nacional del Perú + Lima
+    const dicZonas = {
+        'AREQUIPA':[-16.40,-71.53], 'CUSCO':[-13.53,-71.96], 'TRUJILLO':[-8.10,-79.02], 'CHICLAYO':[-6.77,-79.84], 'PIURA':[-5.19,-80.62], 
+        'IQUITOS':[-3.74,-73.25], 'HUANCAYO':[-12.06,-75.20], 'TACNA':[-18.01,-70.25], 'CAJAMARCA':[-7.16,-78.51], 'PUNO':[-15.84,-70.02], 
+        'AYACUCHO':[-13.15,-74.22], 'HUANUCO':[-9.93,-76.24], 'TARAPOTO':[-6.48,-76.36], 'PUCALLPA':[-8.39,-74.55], 'ICA':[-14.06,-75.72], 
+        'LURIGANCHO':[-11.97,-76.99], 'ATE':[-12.02,-76.91], 'CALLAO':[-12.05,-77.13], 'PUENTE PIEDRA':[-11.86,-77.07], 'CHILLON':[-11.88,-77.06], 
+        'COMAS':[-11.93,-77.04], 'SURCO':[-12.13,-76.99], 'MIRAFLORES':[-12.11,-77.03], 'SAN ISIDRO':[-12.09,-77.03], 'LIMA':[-12.04,-77.02] 
+    };
+
+    let marcadores = L.featureGroup();
+
+    arrayCliData.forEach(c => {
+        let id = normalizarTexto(c[cId]); let raz = c[cRz]||'Desc'; let ubi = normalizarTexto(c[cUb]); let vnt = mapVentas[id]||0;
+        let coord = dicZonas['LIMA']; // Por defecto Lima si no hay match
+        for(let z in dicZonas) { if(ubi.includes(z)) { coord = dicZonas[z]; break; } }
+        
+        // Dispersión espiral para que clientes de un mismo distrito no se tapen en el mapa
+        let rad = Math.random() * 0.04; let ang = Math.random() * Math.PI * 2;
+        let lat = coord[0] + (Math.sin(ang) * rad); let lng = coord[1] + (Math.cos(ang) * rad);
+
+        let color = vnt > 0 ? '#34a853' : '#ea4335';
+        let markHtml = `<div style="background-color:${color};width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 5px rgba(0,0,0,0.6);"></div>`;
+        let icon = L.divIcon({ html: markHtml, className: 'custom-pin', iconSize: [16,16] });
+
+        let m = L.marker([lat, lng], {icon: icon}).bindPopup(`<b>${raz}</b><br>Facturado: S/ ${vnt.toLocaleString()}<br><small>${c[cUb]||''}</small>`);
+        marcadores.addLayer(m);
+    });
     
-    db.ventas.forEach(venta => {
-        let vend = db.vendedores.find(v => normalizarTexto(v[vColIdVend]) === normalizarTexto(venta[ventColIdVend]));
-        let tipo = vend && vend[vColTipo] ? normalizarTexto(vend[vColTipo]) : 'OTROS';
-        let valor = parseNum(venta[ventColPrecio]);
-        if (tipo.includes('CALL CENTER')) canales['CALL CENTER'] += valor; else canales['COBERTURA'] += valor;
-    });
-
-    if(graficos.donaGen) graficos.donaGen.destroy();
-    graficos.donaGen = new Chart(document.getElementById('chartDonaGeneral').getContext('2d'), { type: 'pie', data: { labels: ['Call Center', 'Cobertura'], datasets: [{ data: [canales['CALL CENTER'], canales['COBERTURA']], backgroundColor: ['#4285f4', '#ea4335'] }] }, options: { responsive:true, maintainAspectRatio:false, plugins: { legend: { position: 'bottom' } } } });
-
-    // Gráfico de Líneas (Arreglado con parseFechaEstricta)
-    let daily = {};
-    db.ventas.forEach(v => { 
-        let fec = v[ventColFecha]; 
-        let valor = parseNum(v[ventColPrecio]);
-        if(fec && valor > 0) {
-            let fechaLimpia = String(fec).split(' ')[0]; // Asegurar formato corto "DD/MM/YYYY"
-            daily[fechaLimpia] = (daily[fechaLimpia] || 0) + valor; 
-        }
-    });
-
-    let fechasOrdenadas = Object.keys(daily).sort((a,b) => parseFechaEstricta(a) - parseFechaEstricta(b));
-    
-    if(graficos.lineaGen) graficos.lineaGen.destroy();
-    graficos.lineaGen = new Chart(document.getElementById('chartLinea').getContext('2d'), { 
-        type: 'line', data: { labels: fechasOrdenadas, datasets: [{ label: 'Ventas Diarias', data: fechasOrdenadas.map(f => daily[f]), borderColor: '#4285f4', fill: false, tension: 0.1 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-    });
-
-    // Ranking de Metas
-    let vColNom = getColExacto(db.vendedores[0], ['NOMBRE']);
-    let rankingArr = db.vendedores.filter(v => parseNum(v[vColMeta]) > 0).map(v => {
-        let idBuscar = normalizarTexto(v[vColIdVend]);
-        let tot = db.ventas.filter(venta => normalizarTexto(venta[ventColIdVend]) === idBuscar).reduce((sum, venta) => sum + parseNum(venta[ventColPrecio]), 0);
-        return { nombre: v[vColNom], pct: (tot / parseNum(v[vColMeta])) * 100 };
-    }).sort((a,b) => b.pct - a.pct);
-
-    if(graficos.rankGen) graficos.rankGen.destroy();
-    graficos.rankGen = new Chart(document.getElementById('chartRankingMeta').getContext('2d'), { 
-        type: 'bar', data: { labels: rankingArr.map(r => r.nombre), datasets: [{ label: 'Avance %', data: rankingArr.map(r => Math.min(r.pct, 100)), backgroundColor: '#4285f4' }] }, options: { responsive: true, maintainAspectRatio: false }
-    });
-
-    // Mapa: Todos los clientes
-    renderizarMapa('mapaGeneral', db.clientes);
+    marcadores.addTo(map);
+    // Zoom inteligente automático hacia donde haya clientes, tope de zoom en 12 para no ver las calles difuminadas
+    if(arrayCliData.length > 0) map.fitBounds(marcadores.getBounds(), {padding: [30, 30], maxZoom: 12});
+    setTimeout(() => { map.invalidateSize(); }, 300);
 }
 
-// --- VISTA 2: PRODUCTIVIDAD VENDEDOR ---
-function cargarDataVendedor(vendedorData) {
+// =========================================
+// LÓGICA DE VISTAS (MATEMÁTICA Y GRÁFICOS)
+// =========================================
+function cargarDataGeneral() {
+    let vColM = getColExacto(db.vendedores[0], ['META']); let vColIdV = getColExacto(db.vendedores[0], ['ID_VENDEDOR']); let vColT = getColExacto(db.vendedores[0], ['TIPO']);
+    let vtColP = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']); let vtColIdV = getColExacto(db.ventas[0], ['ID_VENDEDOR']); let vtColF = getColExacto(db.ventas[0], ['FECHA DE VENTA', 'FECHA']);
+    
+    let metaT = db.vendedores.reduce((s, v) => s + parseNum(v[vColM]), 0);
+    let vtaT = db.ventas.reduce((s, v) => s + parseNum(v[vtColP]), 0);
+    
+    document.getElementById('kpiGeneral').innerHTML = `<div class="kpi-box destacado"><h4>Venta Total</h4><span>${formatearMoneda(vtaT)}</span></div><div class="kpi-box"><h4>Meta General</h4><span style="color:#333">${formatearMoneda(metaT)}</span></div><div class="kpi-box"><h4>Total Clientes BD</h4><span style="color:#333">${new Set(db.clientes.map(c => c[getColExacto(db.clientes[0],['ID_CLIENTE'])])).size}</span></div>`;
+
+    if(graficos.genV) graficos.genV.destroy();
+    graficos.genV = new Chart(document.getElementById('chartVelocimetroGeneral').getContext('2d'), { type:'doughnut', data:{datasets:[{data:[vtaT, Math.max(0,metaT-vtaT)], backgroundColor:['#34a853','#ea4335'], borderWidth:0}]}, options:{responsive:true, maintainAspectRatio:false, rotation:-90, circumference:180, cutout:'75%', plugins:{legend:{display:false}}} });
+    document.getElementById('textoVelocimetroGeneral').textContent = (metaT>0?(vtaT/metaT)*100:0).toFixed(1)+'%';
+
+    let can = {'CALL CENTER':0, 'COBERTURA':0};
+    db.ventas.forEach(v => {
+        let vend = db.vendedores.find(vd => normalizarTexto(vd[vColIdV]) === normalizarTexto(v[vtColIdV]));
+        let t = vend && vend[vColT] ? normalizarTexto(vend[vColT]) : '';
+        if(t.includes('CALL')) can['CALL CENTER']+=parseNum(v[vtColP]); else can['COBERTURA']+=parseNum(v[vtColP]);
+    });
+    
+    if(graficos.genD) graficos.genD.destroy();
+    graficos.genD = new Chart(document.getElementById('chartDonaGeneral').getContext('2d'), { type:'pie', data:{labels:['Call Center','Cobertura'], datasets:[{data:[can['CALL CENTER'],can['COBERTURA']], backgroundColor:['#4285f4','#ea4335']}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}} });
+
+    let daily={}; 
+    db.ventas.forEach(v=>{ 
+        let fObj = parseFechaEstricta(v[vtColF]); 
+        if(fObj){ daily[fObj.string] = { val: (daily[fObj.string]?.val || 0) + parseNum(v[vtColP]), sort: fObj.sortValue }; } 
+    });
+    let arrFechas = Object.keys(daily).map(k => ({ label: k, ...daily[k] })).sort((a,b)=>a.sort-b.sort);
+    
+    if(graficos.genL) graficos.genL.destroy();
+    graficos.genL = new Chart(document.getElementById('chartLineaGeneral').getContext('2d'), { type:'line', data:{labels:arrFechas.map(f=>f.label), datasets:[{label:'Ventas', data:arrFechas.map(f=>f.val), borderColor:'#4285f4', backgroundColor:'rgba(66, 133, 244, 0.1)', fill:true, tension:0.1}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}} });
+
+    let rank = db.vendedores.filter(v=>parseNum(v[vColM])>0).map(v=>{
+        let tot = db.ventas.filter(vt=>normalizarTexto(vt[vtColIdV])===normalizarTexto(v[vColIdV])).reduce((s,vt)=>s+parseNum(vt[vtColP]),0);
+        return {n:v[getColExacto(v,['NOMBRE'])], p:(tot/parseNum(v[vColM]))*100};
+    }).sort((a,b)=>b.p-a.p);
+    if(graficos.genR) graficos.genR.destroy();
+    graficos.genR = new Chart(document.getElementById('chartRankingMeta').getContext('2d'), { type:'bar', data:{labels:rank.map(r=>r.n), datasets:[{label:'Avance %', data:rank.map(r=>Math.min(r.p,100)), backgroundColor:'#4285f4'}]}, options:{responsive:true, maintainAspectRatio:false} });
+
+    inyectarMapaNacional('ContenedorMapaGeneral', db.clientes);
+}
+
+function cargarDataVendedor(vdData) {
     document.getElementById('estadoVendedorSeleccion').style.display = 'none';
     document.getElementById('contenidoProductividad').style.display = 'block';
+    document.getElementById('tituloDashboard').textContent = `Análisis: ${vdData[getColExacto(vdData, ['NOMBRE'])]}`;
     
-    let vColNom = getColExacto(vendedorData, ['NOMBRE']);
-    document.getElementById('tituloDashboard').textContent = `Análisis: ${vendedorData[vColNom]}`;
+    let idV = normalizarTexto(vdData[getColExacto(vdData, ['ID_VENDEDOR'])]);
+    let m = parseNum(vdData[getColExacto(vdData, ['META'])]);
+    let vtColP = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']);
+    let sVt = db.ventas.filter(v=>normalizarTexto(v[getColExacto(v,['ID_VENDEDOR'])])===idV);
+    let totV = sVt.reduce((s,v)=>s+parseNum(v[vtColP]),0);
+    let sCli = db.clientes.filter(c=>normalizarTexto(c[getColExacto(c,['ID_VENDEDOR'])])===idV);
 
-    let vColIdVend = getColExacto(vendedorData, ['ID_VENDEDOR', 'VENDEDOR']);
-    let ventColIdVend = getColExacto(db.ventas[0], ['ID_VENDEDOR', 'VENDEDOR']);
-    let ventColPrecio = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']);
-    let vColMeta = getColExacto(vendedorData, ['META']);
-    let idBuscado = normalizarTexto(vendedorData[vColIdVend]);
+    document.getElementById('kpiVendedor').innerHTML = `<div class="kpi-box destacado"><h4>Logrado</h4><span>${formatearMoneda(totV)}</span></div><div class="kpi-box"><h4>Meta</h4><span style="color:#333">${formatearMoneda(m)}</span></div><div class="kpi-box kpi-clickable" onclick="mostrarModalInactivos('${idV}')"><h4>Directorio 🔍</h4><span style="color:#333">${sCli.length}</span></div>`;
 
-    const susVentas = db.ventas.filter(v => normalizarTexto(v[ventColIdVend]) === idBuscado);
-    let metaVendedor = parseNum(vendedorData[vColMeta]);
-    let suVentaTotal = susVentas.reduce((sum, v) => sum + parseNum(v[ventColPrecio]), 0);
-    let pctVendedor = metaVendedor > 0 ? (suVentaTotal/metaVendedor)*100 : 0;
+    if(graficos.vendV) graficos.vendV.destroy();
+    graficos.vendV = new Chart(document.getElementById('chartVelocimetroVendedor').getContext('2d'), { type:'doughnut', data:{datasets:[{data:[totV, Math.max(0,m-totV)], backgroundColor:['#34a853','#ea4335'], borderWidth:0}]}, options:{responsive:true, maintainAspectRatio:false, rotation:-90, circumference:180, cutout:'75%', plugins:{legend:{display:false}}} });
+    document.getElementById('textoVelocimetroVendedor').textContent = (m>0?(totV/m)*100:0).toFixed(1)+'%';
 
-    let cliColIdVend = getColExacto(db.clientes[0], ['ID_VENDEDOR', 'VENDEDOR']);
-    let susClientesBD = db.clientes.filter(c => normalizarTexto(c[cliColIdVend]) === idBuscado);
+    if(graficos.vendD) graficos.vendD.destroy();
+    graficos.vendD = new Chart(document.getElementById('chartDonaVendedor').getContext('2d'), { type:'pie', data:{labels:['Logrado','Faltante'], datasets:[{data:[totV, Math.max(0,m-totV)], backgroundColor:['#4285f4','#ea4335']}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}} });
 
-    document.getElementById('kpiVendedor').innerHTML = `
-        <div class="kpi-box destacado"><h4>Venta Lograda</h4><span>${formatearMoneda(suVentaTotal)}</span></div>
-        <div class="kpi-box"><h4>Meta Asignada</h4><span style="color:#333;">${formatearMoneda(metaVendedor)}</span></div>
-        <div class="kpi-box kpi-clickable" onclick="mostrarModalInactivos('${idBuscado}')" title="Ver clientes"><h4>Clientes Base 🔍</h4><span style="color:#333;">${susClientesBD.length}</span></div>
-    `;
-
-    if(graficos.veloVend) graficos.veloVend.destroy();
-    graficos.veloVend = new Chart(document.getElementById('chartVelocimetroVendedor').getContext('2d'), { type: 'doughnut', data: { datasets: [{ data: [pctVendedor, Math.max(0,100-pctVendedor)], backgroundColor: ['#34a853', '#ea4335'], borderWidth:0 }] }, options: { responsive:true, maintainAspectRatio:false, rotation:-90, circumference:180, cutout:'75%', plugins:{legend:{display:false}} } });
-    document.getElementById('textoVelocimetroVendedor').textContent = pctVendedor.toFixed(1) + '%';
-
-    if(graficos.donaVend) graficos.donaVend.destroy();
-    graficos.donaVend = new Chart(document.getElementById('chartDonaVendedor').getContext('2d'), { type: 'pie', data: { labels: ['Ventas Concretadas', 'Faltante'], datasets: [{ data: [suVentaTotal, Math.max(0, metaVendedor-suVentaTotal)], backgroundColor: ['#4285f4', '#ea4335'] }] }, options: { responsive:true, maintainAspectRatio:false, plugins: { legend: { position: 'bottom' } } } });
-
-    // Tablas Productos
-    let pColId = getColExacto(db.productos[0], ['ID_VENDEDOR', 'VENDEDOR']);
-    let pColNom = getColExacto(db.productos[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']);
-    let pColCaja = getColExacto(db.productos[0], ['CANTIDAD CAJA', 'CAJA']);
-    let pColUnid = getColExacto(db.productos[0], ['CANTIDAD UNID', 'UNID']);
-
-    let cUnid = {}; let cCaja = {};
-    db.productos.filter(p => normalizarTexto(p[pColId]) === idBuscado).forEach(p => { 
-        let nom = p[pColNom]; let u = parseNum(p[pColUnid]); let c = parseNum(p[pColCaja]);
-        if(nom) { if(u>0) cUnid[nom]=(cUnid[nom]||0)+u; if(c>0) cCaja[nom]=(cCaja[nom]||0)+c; }
+    let pCId = getColExacto(db.productos[0], ['ID_VENDEDOR']); let pCNom = getColExacto(db.productos[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']);
+    let cU={}; let cC={};
+    db.productos.filter(p=>normalizarTexto(p[pCId])===idV).forEach(p=>{
+        let n=p[pCNom]; let u=parseNum(p[getColExacto(p,['CANTIDAD UNID','UNID'])]); let c=parseNum(p[getColExacto(p,['CANTIDAD CAJA','CAJA'])]);
+        if(n){ if(u>0) cU[n]=(cU[n]||0)+u; if(c>0) cC[n]=(cC[n]||0)+c; }
     });
     
-    llenarTablaSimple('tablaProdUnid', cUnid, false); 
-    llenarTablaSimple('tablaProdCaja', cCaja, false);
+    const fillTb = (id, obj) => { let tb=document.querySelector(`#${id} tbody`); tb.innerHTML=''; let keys = Object.keys(obj).sort((a,b)=>obj[b]-obj[a]).slice(0,5); if(keys.length===0){tb.innerHTML=`<tr><td colspan="2" style="text-align:center;">Sin datos</td></tr>`;} else{keys.forEach(k=>tb.innerHTML+=`<tr><td>${k}</td><td class="num-col">${obj[k].toLocaleString()}</td></tr>`);} };
+    fillTb('tablaProdUnid', cU); fillTb('tablaProdCaja', cC);
 
-    // Mapa: Solo los clientes de este vendedor
-    renderizarMapa('mapaVendedor', susClientesBD);
+    inyectarMapaNacional('ContenedorMapaVendedor', sCli);
 }
 
-// --- VISTA 3: SITUACIÓN ---
 function cargarDataSituacion() {
-    let ventColPrecio = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']);
-    let ventColRazon = getColExacto(db.ventas[0], ['RAZÓN SOCIAL', 'RAZON SOCIAL']);
-    let ventaTotal = db.ventas.reduce((sum, v) => sum + parseNum(v[ventColPrecio]), 0);
-    let numTransacciones = db.ventas.length;
+    let vtColP = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']); let vtColR = getColExacto(db.ventas[0], ['RAZÓN SOCIAL', 'RAZON']);
+    let vT = db.ventas.reduce((s,v)=>s+parseNum(v[vtColP]),0); let lV = db.ventas.length;
+    document.getElementById('kpiTicketPromedio').textContent = formatearMoneda(lV>0?vT/lV:0);
     
-    document.getElementById('kpiTicketPromedio').textContent = formatearMoneda(numTransacciones>0 ? ventaTotal/numTransacciones : 0);
+    let cC={}; db.ventas.forEach(v=>{ let r=normalizarTexto(v[vtColR]); if(r) cC[r]=(cC[r]||0)+parseNum(v[vtColP]); });
+    document.getElementById('kpiFrecuencia').textContent = Object.keys(cC).length>0 ? (lV/Object.keys(cC).length).toFixed(1) : 0;
 
-    let comprasCli = {};
-    db.ventas.forEach(v => {
-        let r = normalizarTexto(v[ventColRazon]);
-        if(r) { comprasCli[r] = (comprasCli[r]||0) + parseNum(v[ventColPrecio]); }
-    });
+    let cColR = getColExacto(db.clientes[0], ['RAZÓN SOCIAL']); let cColE = getColExacto(db.clientes[0], ['ESTADO DE VENTA']);
+    let rsg=0; let clAct = [];
+    db.clientes.forEach(c=>{ if(normalizarTexto(c[cColE]).includes('ACTIVO')){ clAct.push(c); if(!cC[normalizarTexto(c[cColR])]) rsg++; } });
+    document.getElementById('kpiRiesgo').textContent = rsg;
 
-    let totalCompradores = Object.keys(comprasCli).length;
-    document.getElementById('kpiFrecuencia').textContent = totalCompradores>0 ? (numTransacciones/totalCompradores).toFixed(1) : 0;
+    let arr = Object.keys(cC).map(k=>({n:k, t:cC[k]})).sort((a,b)=>b.t-a.t);
+    let tb = document.querySelector('#tablaABC tbody'); tb.innerHTML=''; let sAc=0;
+    arr.forEach(c=>{ sAc+=c.t; let pct=(sAc/vT)*100; let sg=pct<=80?'A (Top)':(pct<=95?'B (Medio)':'C (Bajo)'); let cs=pct<=80?'badge-a':(pct<=95?'badge-b':'badge-c'); tb.innerHTML+=`<tr><td>${c.n}</td><td><span class="badge ${cs}">${sg}</span></td><td class="num-col">${formatearMoneda(c.t)}</td></tr>`; });
 
-    let colCliRazon = getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'NOMBRE COMERCIAL']);
-    let colCliEstado = getColExacto(db.clientes[0], ['ESTADO DE VENTA', 'ESTADO']);
-    let riesgoCtn = 0;
-    
-    // Lista de clientes activos para el mapa
-    let clientesActivosParaMapa = [];
-
-    db.clientes.forEach(c => {
-        let rDB = normalizarTexto(c[colCliRazon]);
-        let estado = normalizarTexto(c[colCliEstado]);
-        if (estado.includes('ACTIVO')) {
-            clientesActivosParaMapa.push(c);
-            if (!comprasCli[rDB]) riesgoCtn++; // Activo pero sin ventas en la data cruzada
-        }
-    });
-    document.getElementById('kpiRiesgo').textContent = riesgoCtn;
-
-    let arr = Object.keys(comprasCli).map(k => ({ n: k, t: comprasCli[k] })).sort((a,b) => b.t - a.t);
-    let tb = document.querySelector('#tablaABC tbody');
-    tb.innerHTML = ''; let sumAcum = 0;
-    
-    arr.forEach(cli => {
-        sumAcum += cli.t;
-        let pct = (sumAcum / ventaTotal) * 100;
-        let seg = pct <= 80 ? 'A (Top)' : (pct <= 95 ? 'B (Medio)' : 'C (Bajo)');
-        let cls = pct <= 80 ? 'badge-a' : (pct <= 95 ? 'badge-b' : 'badge-c');
-        
-        tb.innerHTML += `<tr><td>${cli.n}</td><td><span class="badge ${cls}">${seg}</span></td><td class="num-col">${formatearMoneda(cli.t)}</td></tr>`;
-    });
-
-    // Mapa: Solo Clientes Activos
-    renderizarMapa('mapaSituacion', clientesActivosParaMapa);
+    inyectarMapaNacional('ContenedorMapaSituacion', clAct);
 }
 
-// --- VISTA 4: BÚSQUEDA ---
+// =========================================
+// BÚSQUEDA AVANZADA CON AUTO-SCROLL MÓVIL
+// =========================================
 function llenarTablaDirectorio() {
-    let tb = document.querySelector('#tablaDirectorioClientes tbody');
-    tb.innerHTML = '';
+    let tb = document.querySelector('#tablaDirectorioClientes tbody'); tb.innerHTML='';
+    let docC = getColExacto(db.clientes[0], ['Documento_Numero', 'RUC', 'DNI']); let razC = getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'NOMBRE']);
     
-    let colDoc = getColExacto(db.clientes[0], ['Documento_Numero', 'RUC', 'DNI']);
-    let colRaz = getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'NOMBRE COMERCIAL']);
-    let colIdVend = getColExacto(db.clientes[0], ['ID_VENDEDOR', 'VENDEDOR']);
-    let colEst = getColExacto(db.clientes[0], ['ESTADO DE VENTA', 'ESTADO']);
-    
-    // Diccionario rápido de vendedores
-    let dictVendedores = {};
-    let vColId = getColExacto(db.vendedores[0], ['ID_VENDEDOR']);
-    let vColNom = getColExacto(db.vendedores[0], ['NOMBRE']);
-    db.vendedores.forEach(v => { dictVendedores[normalizarTexto(v[vColId])] = v[vColNom]; });
-
-    db.clientes.forEach(c => {
-        let doc = c[colDoc] || 'N/A';
-        let raz = c[colRaz] || 'N/A';
-        let vendNom = dictVendedores[normalizarTexto(c[colIdVend])] || 'No Asignado';
-        let est = normalizarTexto(c[colEst]);
-        let badgeCls = est.includes('ACTIVO') ? 'badge-activo' : 'badge-inactivo';
-        
-        let tr = document.createElement('tr');
-        tr.className = 'fila-directorio';
-        tr.innerHTML = `<td>${doc}</td><td>${raz}</td><td>${vendNom}</td><td><span class="badge ${badgeCls}">${est}</span></td>`;
-        tb.appendChild(tr);
+    db.clientes.forEach(c=>{
+        let d = c[docC]||''; let r = c[razC]||'';
+        if(d || r) {
+            let tr = document.createElement('tr'); tr.className = 'fila-cliente';
+            tr.innerHTML = `<td>${d}</td><td>${r}</td>`;
+            tr.onclick = () => mostrarDetalleCliente(d, r, tr);
+            tb.appendChild(tr);
+        }
     });
 }
 
 function filtrarDirectorioClientes() {
     let input = normalizarTexto(document.getElementById("inputBusquedaCliente").value);
-    let filas = document.querySelectorAll('.fila-directorio');
-    filas.forEach(fila => {
-        let textoFila = normalizarTexto(fila.textContent);
-        fila.style.display = textoFila.includes(input) ? "" : "none";
-    });
+    document.querySelectorAll('.fila-cliente').forEach(f => { f.style.display = normalizarTexto(f.textContent).includes(input) ? "" : "none"; });
 }
 
-// =========================================
-// MAPA GEOGRÁFICO UNIFICADO E INTELIGENTE
-// =========================================
-function renderizarMapa(idContenedor, arrayClientesFiltrados) {
-    if (mapasActivos[idContenedor]) {
-        mapasActivos[idContenedor].remove(); // Destruye el mapa anterior para evitar bugs visuales de Leaflet en divs ocultos
-    }
+function mostrarDetalleCliente(doc, razon, trActivo) {
+    document.querySelectorAll('.fila-cliente').forEach(f => f.classList.remove('activa'));
+    if(trActivo) trActivo.classList.add('activa');
+    
+    let panel = document.getElementById('panelDetalleCliente');
+    panel.style.display = 'flex'; panel.style.flexDirection = 'column';
+    
+    // Auto-Scroll suave en dispositivos móviles para no despistar al vendedor
+    if (window.innerWidth <= 1024) { panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    
+    document.getElementById('detalleNombreCliente').textContent = razon || 'Desconocido';
+    document.getElementById('detalleDocCliente').textContent = doc || 'Sin Doc';
 
-    let mapa = L.map(idContenedor).setView([-12.0464, -77.0428], 10);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: 'Dialex' }).addTo(mapa);
-    mapasActivos[idContenedor] = mapa;
+    let vColR = getColExacto(db.ventas[0], ['RAZÓN SOCIAL', 'RAZON']); let vColD = getColExacto(db.ventas[0], ['Documento_Numero', 'RUC']); let vColP = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']); let vColF = getColExacto(db.ventas[0], ['FECHA DE VENTA', 'FECHA']);
+    
+    let susVtas = db.ventas.filter(v => (normalizarTexto(v[vColR])===normalizarTexto(razon) && razon) || (v[vColD]===doc && doc));
+    document.getElementById('detalleTotalVenta').textContent = formatearMoneda(susVtas.reduce((s,v)=>s+parseNum(v[vColP]),0));
+    
+    let dbCli = db.clientes.find(c => normalizarTexto(c[getColExacto(c,['RAZÓN SOCIAL', 'NOMBRE'])]) === normalizarTexto(razon));
+    let estado = dbCli ? normalizarTexto(dbCli[getColExacto(dbCli,['ESTADO DE VENTA', 'ESTADO'])]) : '---';
+    document.getElementById('detalleEstadoCli').innerHTML = `<span class="badge ${estado.includes('ACTIVO')?'badge-activo':'badge-inactivo'}">${estado}</span>`;
 
-    // Diccionario de Ventas para cruzar data rápido
-    let comprasCli = {};
-    let ventColId = getColExacto(db.ventas[0], ['ID_CLIENTE']);
-    let ventColP = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']);
-    db.ventas.forEach(v => {
-        let id = normalizarTexto(v[ventColId]);
-        if(id) comprasCli[id] = (comprasCli[id]||0) + parseNum(v[ventColP]);
+    let hist={}; 
+    susVtas.forEach(v=>{ let fObj = parseFechaEstricta(v[vColF]); if(fObj){ hist[fObj.string] = { val: (hist[fObj.string]?.val || 0) + parseNum(v[vColP]), sort: fObj.sortValue }; } });
+    let hArr = Object.keys(hist).map(k => ({ label: k, ...hist[k] })).sort((a,b)=>a.sort-b.sort);
+
+    if(graficos.cliL) graficos.cliL.destroy();
+    graficos.cliL = new Chart(document.getElementById('chartClienteHistorial').getContext('2d'), { type:'bar', data:{labels:hArr.map(f=>f.label), datasets:[{label:'S/', data:hArr.map(f=>f.val), backgroundColor:'#34a853', borderRadius:4}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}} });
+
+    let pColR = getColExacto(db.productos[0], ['RAZÓN SOCIAL', 'RAZON']); let pColD = getColExacto(db.productos[0], ['Documento_Numero', 'RUC']); let pColN = getColExacto(db.productos[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']); let pColC = getColExacto(db.productos[0], ['CANTIDAD CAJA', 'CAJA']); let pColU = getColExacto(db.productos[0], ['CANTIDAD UNID', 'UNID']);
+    let prds={}; db.productos.filter(p=>(normalizarTexto(p[pColR])===normalizarTexto(razon) && razon)||(p[pColD]===doc && doc)).forEach(p=>{
+        let n=p[pColN]; let u=parseNum(p[pColU]); let c=parseNum(p[pColC]);
+        if(n){ if(!prds[n]) prds[n]={u:0,c:0}; prds[n].u+=u; prds[n].c+=c; }
     });
-
-    let cliColId = getColExacto(db.clientes[0], ['ID_CLIENTE']);
-    let cliColRaz = getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'NOMBRE COMERCIAL']);
-    let cliColUbi = getColExacto(db.clientes[0], ['UBICACIÓN', 'DIRECCION']);
-
-    const coordsBase = {
-        'ATE':[-12.02,-76.91], 'CALLAO':[-12.05,-77.13], 'PUENTE PIEDRA':[-11.86,-77.07], 'SAN JUAN DE LURIGANCHO':[-11.97,-76.99], 
-        'COMAS':[-11.93,-77.04], 'CHILLON':[-11.88,-77.06], 'LIMA':[-12.04,-77.02] 
-    };
-
-    arrayClientesFiltrados.forEach(c => {
-        let id = normalizarTexto(c[cliColId]);
-        let raz = c[cliColRaz] || 'Desconocido';
-        let ubi = normalizarTexto(c[cliColUbi]);
-        let venta = comprasCli[id] || 0;
-
-        let coords = coordsBase['LIMA'];
-        for(let z in coordsBase) { if(ubi.includes(z)) { coords = coordsBase[z]; break; } }
-        
-        let lat = coords[0] + (Math.random() - 0.5) * 0.05; // Dispersión visual
-        let lng = coords[1] + (Math.random() - 0.5) * 0.05;
-
-        let iconColor = venta > 0 ? '#34a853' : '#ea4335'; // Verde si compró, rojo si no
-
-        let markerHtml = `<div style="background-color:${iconColor}; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.5);"></div>`;
-        let customIcon = L.divIcon({ html: markerHtml, className: 'custom-pin', iconSize: [16, 16] });
-
-        L.marker([lat, lng], {icon: customIcon}).addTo(mapa)
-         .bindPopup(`<b>${raz}</b><br>Facturado: S/ ${venta.toLocaleString()}<br><small>${c[cliColUbi]||'Sin dirección'}</small>`);
-    });
-
-    // Fix clásico de Leaflet para contenedores que cambian de display:none a block
-    setTimeout(() => { mapa.invalidateSize(); }, 500);
-}
-
-// =========================================
-// COMPONENTES MENORES
-// =========================================
-function llenarTablaSimple(id, obj, moneda) {
-    const tb = document.querySelector(`#${id} tbody`);
-    tb.innerHTML = '';
-    let items = Object.keys(obj).map(k => ({ l: k, v: obj[k] })).sort((a,b) => b.v - a.v).slice(0, 5);
-    if(items.length===0) tb.innerHTML = `<tr><td colspan="2" style="text-align:center;">Sin datos</td></tr>`;
-    items.forEach(i => { tb.innerHTML += `<tr><td>${i.l}</td><td class="num-col">${moneda ? formatearMoneda(i.v) : i.v}</td></tr>`; });
+    
+    let tb = document.querySelector('#tablaClienteProductos tbody'); tb.innerHTML='';
+    let keysPrd = Object.keys(prds).sort((a,b)=>(prds[b].u+prds[b].c)-(prds[a].u+prds[a].c));
+    if(keysPrd.length===0) { tb.innerHTML=`<tr><td colspan="2" style="text-align:center">Sin productos registrados en BD</td></tr>`; }
+    else { keysPrd.forEach(k=>{ let sumStr = prds[k].c>0 ? `${prds[k].c} cjs` : `${prds[k].u} und`; tb.innerHTML+=`<tr><td>${k}</td><td class="num-col">${sumStr}</td></tr>`; }); }
 }
 
 function mostrarModalInactivos(idVendedor) { 
-    let tb = document.querySelector('#tablaInactivos tbody');
-    tb.innerHTML = '';
-    let colIdVend = getColExacto(db.clientes[0], ['ID_VENDEDOR', 'VENDEDOR']);
-    let colDoc = getColExacto(db.clientes[0], ['Documento_Numero', 'RUC']);
-    let colRaz = getColExacto(db.clientes[0], ['RAZÓN SOCIAL']);
-    let colEst = getColExacto(db.clientes[0], ['ESTADO DE VENTA']);
-
-    db.clientes.filter(c => normalizarTexto(c[colIdVend]) === idVendedor).forEach(c => {
-        let est = normalizarTexto(c[colEst]);
-        let badgeCls = est.includes('ACTIVO') ? 'badge-activo' : 'badge-inactivo';
-        tb.innerHTML += `<tr><td>${c[colDoc]||''}</td><td>${c[colRaz]||''}</td><td><span class="badge ${badgeCls}">${est}</span></td></tr>`;
+    let tb = document.querySelector('#tablaInactivos tbody'); tb.innerHTML = '';
+    db.clientes.filter(c => normalizarTexto(c[getColExacto(c,['ID_VENDEDOR'])]) === normalizarTexto(idVendedor)).forEach(c => {
+        let est = normalizarTexto(c[getColExacto(c,['ESTADO DE VENTA'])]);
+        tb.innerHTML += `<tr><td>${c[getColExacto(c,['Documento_Numero'])]||''}</td><td>${c[getColExacto(c,['RAZÓN SOCIAL'])]||''}</td><td><span class="badge ${est.includes('ACTIVO')?'badge-activo':'badge-inactivo'}">${est}</span></td></tr>`;
     });
     document.getElementById('modalInactivos').style.display = 'flex'; 
 }
-
 function cerrarModalInactivos() { document.getElementById('modalInactivos').style.display = 'none'; }
