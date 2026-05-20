@@ -5,83 +5,293 @@ const urls = {
     clientes: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ70FuTF7cerHOQSNXrIcLFDFRprfHAV728CeKLsmNZdlxq3rA_SunZ6ILxYFtZVHVfQdphUycfNbUC/pub?gid=1344644608&single=true&output=csv'
 };
 
-let db = { vendedores: [], ventas: [], productos: [], clientes: [] };
-let charts = {}; 
-let mapasInstancias = {}; 
+let db = {
+    vendedores: [],
+    ventas: [],
+    productos: [],
+    clientes: []
+};
+
+let charts = {};
+let mapasInstancias = {};
 let moduloActual = 'general';
 let vendedorSeleccionadoActivo = null;
 
-function normalizarTexto(t) { return t ? String(t).replace(/\s+/g, ' ').trim().toUpperCase() : ''; }
+let COLS = {
+    vendedores: {},
+    ventas: {},
+    productos: {},
+    clientes: {}
+};
+
+let cache = {
+    ventasPorVendedor: {},
+    clientesPorVendedor: {},
+    ventasPorDocumento: {},
+    ventasPorRazon: {},
+    productosPorDocumento: {},
+    productosPorVendedor: {},
+    clientesPorDocumento: {}
+};
+
+function normalizarTexto(t) {
+    return t ? String(t).replace(/\s+/g, ' ').trim().toUpperCase() : '';
+}
 
 function getColExacto(obj, opciones) {
-    if(!obj) return null;
-    let keys = Object.keys(obj);
-    for (let op of opciones) { let opL = normalizarTexto(op); let found = keys.find(k => normalizarTexto(k) === opL); if(found) return found; }
-    for (let op of opciones) { let opL = normalizarTexto(op); let found = keys.find(k => normalizarTexto(k).includes(opL)); if(found) return found; }
-    return keys[0]; 
+    if (!obj) return null;
+    const keys = Object.keys(obj);
+    for (let op of opciones) {
+        const opL = normalizarTexto(op);
+        const found = keys.find(k => normalizarTexto(k) === opL);
+        if (found) return found;
+    }
+    for (let op of opciones) {
+        const opL = normalizarTexto(op);
+        const found = keys.find(k => normalizarTexto(k).includes(opL));
+        if (found) return found;
+    }
+    return keys[0] || null;
 }
 
-function parseNum(val) { let num = parseFloat(String(val||'').replace(/,/g, '')); return isNaN(num) ? 0 : num; }
-function formatearMoneda(val) { return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(val); }
+function parseNum(val) {
+    const num = parseFloat(String(val ?? '').replace(/,/g, ''));
+    return isNaN(num) ? 0 : num;
+}
+
+function formatearMoneda(val) {
+    return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(val || 0);
+}
 
 function parseFechaEstricta(dStr) {
-    if(!dStr) return null;
-    let baseStr = String(dStr).split(' ')[0].trim();
+    if (!dStr) return null;
+    const baseStr = String(dStr).split(' ')[0].trim();
     let day, month, year;
-    
+
     if (baseStr.includes('/')) {
-        let parts = baseStr.split('/');
-        if(parts.length !== 3) return null;
-        if (parts[0].length === 4) { year = parts[0]; month = parts[1]; day = parts[2]; } 
-        else { day = parts[0]; month = parts[1]; year = parts[2].length === 2 ? `20${parts[2]}` : parts[2]; }
+        const parts = baseStr.split('/');
+        if (parts.length !== 3) return null;
+        if (parts[0].length === 4) {
+            year = parts[0];
+            month = parts[1];
+            day = parts[2];
+        } else {
+            day = parts[0];
+            month = parts[1];
+            year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+        }
     } else if (baseStr.includes('-')) {
-        let parts = baseStr.split('-');
-        if(parts.length !== 3) return null;
-        if (parts[0].length === 4) { year = parts[0]; month = parts[1]; day = parts[2]; } 
-        else { day = parts[0]; month = parts[1]; year = parts[2]; }
-    } else { return null; }
-    
-    day = day.padStart(2, '0'); month = month.padStart(2, '0');
-    return { string: `${day}/${month}`, sortValue: new Date(`${year}-${month}-${day}T12:00:00`).getTime() };
+        const parts = baseStr.split('-');
+        if (parts.length !== 3) return null;
+        if (parts[0].length === 4) {
+            year = parts[0];
+            month = parts[1];
+            day = parts[2];
+        } else {
+            day = parts[0];
+            month = parts[1];
+            year = parts[2];
+        }
+    } else {
+        return null;
+    }
+
+    day = String(day).padStart(2, '0');
+    month = String(month).padStart(2, '0');
+
+    const fecha = new Date(`${year}-${month}-${day}T12:00:00`);
+    if (isNaN(fecha.getTime())) return null;
+
+    return {
+        string: `${day}/${month}`,
+        sortValue: fecha.getTime()
+    };
 }
 
-function cargarCSV(url) { return new Promise((resolve, reject) => { Papa.parse(url, { download: true, header: true, skipEmptyLines: true, complete: res => resolve(res.data), error: err => reject(err) }); }); }
+function cargarCSV(url) {
+    return new Promise((resolve, reject) => {
+        Papa.parse(url, {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: res => resolve(res.data || []),
+            error: err => reject(err)
+        });
+    });
+}
 
-function destroyChart(id) { if (charts[id]) { charts[id].destroy(); charts[id] = null; } }
-
-function evaluarTeclado(e) { if (e.key === 'Enter') verificarPassword(); }
+function evaluarTeclado(e) {
+    if (e.key === 'Enter') verificarPassword();
+}
 
 function verificarPassword() {
     if (btoa(document.getElementById('passInput').value) === "RGlhbGV4MTIz") {
         document.getElementById('loginScreen').style.opacity = '0';
-        setTimeout(() => { document.getElementById('loginScreen').style.display = 'none'; document.getElementById('loadingScreen').style.display = 'flex'; inicializarApp(); }, 300);
-    } else { document.getElementById('loginError').style.display = 'block'; }
+        setTimeout(() => {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('loadingScreen').style.display = 'flex';
+            inicializarApp();
+        }, 300);
+    } else {
+        document.getElementById('loginError').style.display = 'block';
+    }
+}
+
+function inicializarColumnas() {
+    COLS = {
+        vendedores: {
+            meta: getColExacto(db.vendedores[0], ['META']),
+            id: getColExacto(db.vendedores[0], ['ID_VENDEDOR']),
+            nombre: getColExacto(db.vendedores[0], ['NOMBRE']),
+            apellido: getColExacto(db.vendedores[0], ['APELLIDO']),
+            tipo: getColExacto(db.vendedores[0], ['TIPO'])
+        },
+        ventas: {
+            idVendedor: getColExacto(db.ventas[0], ['ID_VENDEDOR']),
+            total: getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']),
+            fecha: getColExacto(db.ventas[0], ['FECHA DE VENTA', 'FECHA']),
+            documento: getColExacto(db.ventas[0], ['Documento_Numero', 'RUC', 'DNI', 'ID_CLIENTE']),
+            razon: getColExacto(db.ventas[0], ['RAZÓN SOCIAL', 'RAZON SOCIAL', 'NOMBRE'])
+        },
+        productos: {
+            idVendedor: getColExacto(db.productos[0], ['ID_VENDEDOR']),
+            documento: getColExacto(db.productos[0], ['Documento_Numero', 'RUC', 'DNI', 'ID_CLIENTE']),
+            producto: getColExacto(db.productos[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']),
+            unid: getColExacto(db.productos[0], ['CANTIDAD UNID', 'UNID']),
+            caja: getColExacto(db.productos[0], ['CANTIDAD CAJA', 'CAJA'])
+        },
+        clientes: {
+            id: getColExacto(db.clientes[0], ['ID_CLIENTE', 'RUC', 'DNI', 'Documento_Numero']),
+            documento: getColExacto(db.clientes[0], ['Documento_Numero', 'RUC', 'DNI', 'ID_CLIENTE']),
+            razon: getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'RAZON SOCIAL', 'NOMBRE']),
+            ubicacion: getColExacto(db.clientes[0], ['UBICACIÓN', 'UBICACION', 'DIRECCION']),
+            idVendedor: getColExacto(db.clientes[0], ['ID_VENDEDOR']),
+            estado: getColExacto(db.clientes[0], ['ESTADO DE VENTA', 'ESTADO'])
+        }
+    };
+}
+
+function generarIndices() {
+    cache = {
+        ventasPorVendedor: {},
+        clientesPorVendedor: {},
+        ventasPorDocumento: {},
+        ventasPorRazon: {},
+        productosPorDocumento: {},
+        productosPorVendedor: {},
+        clientesPorDocumento: {}
+    };
+
+    db.ventas.forEach(v => {
+        const idV = normalizarTexto(v[COLS.ventas.idVendedor]);
+        const doc = normalizarTexto(v[COLS.ventas.documento]);
+        const raz = normalizarTexto(v[COLS.ventas.razon]);
+
+        if (idV) {
+            if (!cache.ventasPorVendedor[idV]) cache.ventasPorVendedor[idV] = [];
+            cache.ventasPorVendedor[idV].push(v);
+        }
+
+        if (doc) {
+            if (!cache.ventasPorDocumento[doc]) cache.ventasPorDocumento[doc] = [];
+            cache.ventasPorDocumento[doc].push(v);
+        }
+
+        if (raz) {
+            if (!cache.ventasPorRazon[raz]) cache.ventasPorRazon[raz] = [];
+            cache.ventasPorRazon[raz].push(v);
+        }
+    });
+
+    db.clientes.forEach(c => {
+        const idV = normalizarTexto(c[COLS.clientes.idVendedor]);
+        const doc = normalizarTexto(c[COLS.clientes.documento]);
+
+        if (idV) {
+            if (!cache.clientesPorVendedor[idV]) cache.clientesPorVendedor[idV] = [];
+            cache.clientesPorVendedor[idV].push(c);
+        }
+
+        if (doc) {
+            cache.clientesPorDocumento[doc] = c;
+        }
+    });
+
+    db.productos.forEach(p => {
+        const idV = normalizarTexto(p[COLS.productos.idVendedor]);
+        const doc = normalizarTexto(p[COLS.productos.documento]);
+
+        if (idV) {
+            if (!cache.productosPorVendedor[idV]) cache.productosPorVendedor[idV] = [];
+            cache.productosPorVendedor[idV].push(p);
+        }
+
+        if (doc) {
+            if (!cache.productosPorDocumento[doc]) cache.productosPorDocumento[doc] = [];
+            cache.productosPorDocumento[doc].push(p);
+        }
+    });
+}
+
+function crearOActualizarChart(id, config) {
+    const canvas = document.getElementById(id);
+    if (!canvas) return null;
+
+    if (charts[id]) {
+        charts[id].data = config.data;
+        charts[id].options = config.options || charts[id].options;
+        charts[id].update();
+        return charts[id];
+    }
+
+    charts[id] = new Chart(canvas.getContext('2d'), config);
+    return charts[id];
+}
+
+function refrescarMapaVisible(idMapa) {
+    if (mapasInstancias[idMapa] && mapasInstancias[idMapa].instance) {
+        mapasInstancias[idMapa].instance.invalidateSize();
+    }
 }
 
 async function inicializarApp() {
     try {
-        const [resVend, resVent, resProd, resCli] = await Promise.all([cargarCSV(urls.vendedores), cargarCSV(urls.ventas), cargarCSV(urls.productos), cargarCSV(urls.clientes)]);
-        db.vendedores = resVend; db.ventas = resVent; db.productos = resProd; db.clientes = resCli;
-        
+        const [resVend, resVent, resProd, resCli] = await Promise.all([
+            cargarCSV(urls.vendedores),
+            cargarCSV(urls.ventas),
+            cargarCSV(urls.productos),
+            cargarCSV(urls.clientes)
+        ]);
+
+        db.vendedores = resVend;
+        db.ventas = resVent;
+        db.productos = resProd;
+        db.clientes = resCli;
+
+        inicializarColumnas();
+        generarIndices();
         generarMenuVendedores();
-        cambiarModulo('general', document.querySelector('.modulos-list li'));
+
         document.getElementById('loadingScreen').style.display = 'none';
         document.getElementById('appContainer').style.visibility = 'visible';
-    } catch (e) { 
-        document.getElementById('loadingSpinner').style.display = 'none'; 
-        document.getElementById('loadingTitle').textContent = "Error de sincronización con la nube. Revise permisos del CSV."; 
-        document.getElementById('loadingTitle').style.color = '#d93025'; 
+
+        cambiarModulo('general', document.querySelector('.modulos-list li'));
+    } catch (e) {
+        document.getElementById('loadingSpinner').style.display = 'none';
+        document.getElementById('loadingTitle').textContent = 'Error de sincronización con la nube. Revise permisos del CSV.';
+        document.getElementById('loadingTitle').style.color = '#d93025';
     }
 }
 
 function cambiarModulo(modulo, elemento) {
     moduloActual = modulo;
+
     document.querySelectorAll('.modulos-list li').forEach(el => el.classList.remove('active'));
-    if(elemento) elemento.classList.add('active');
-    
+    if (elemento) elemento.classList.add('active');
+
     document.querySelectorAll('.modulo-view').forEach(el => el.style.display = 'none');
     document.getElementById('menuVendedoresContainer').style.display = 'none';
-    
+
     if (modulo === 'general') {
         document.getElementById('vistaGeneral').style.display = 'block';
         document.getElementById('tituloDashboard').textContent = 'Vista General Comercial';
@@ -90,10 +300,14 @@ function cambiarModulo(modulo, elemento) {
         document.getElementById('vistaProductividad').style.display = 'block';
         document.getElementById('menuVendedoresContainer').style.display = 'flex';
         document.getElementById('tituloDashboard').textContent = 'Análisis de Productividad';
-        
-        let actLi = document.querySelector('#listaVendedoresHorizontal li.active');
-        if(!actLi) { let pV = document.querySelector('#listaVendedoresHorizontal li'); if(pV) pV.click(); } 
-        else { if(vendedorSeleccionadoActivo) cargarDataVendedor(vendedorSeleccionadoActivo); }
+
+        const actLi = document.querySelector('#listaVendedoresHorizontal li.active');
+        if (!actLi) {
+            const primerV = document.querySelector('#listaVendedoresHorizontal li');
+            if (primerV) primerV.click();
+        } else if (vendedorSeleccionadoActivo) {
+            cargarDataVendedor(vendedorSeleccionadoActivo);
+        }
     } else if (modulo === 'situacion') {
         document.getElementById('vistaSituacion').style.display = 'block';
         document.getElementById('tituloDashboard').textContent = 'Estrategia de Rentabilidad';
@@ -104,263 +318,625 @@ function cambiarModulo(modulo, elemento) {
         llenarTablaDirectorio();
     }
 
-    setTimeout(() => { for (let key in mapasInstancias) { if (mapasInstancias[key] && mapasInstancias[key].instance) { mapasInstancias[key].instance.invalidateSize(); } } }, 50);
+    setTimeout(() => {
+        if (modulo === 'general') refrescarMapaVisible('ContenedorMapaGeneral');
+        if (modulo === 'productividad') refrescarMapaVisible('ContenedorMapaVendedor');
+        if (modulo === 'situacion') refrescarMapaVisible('ContenedorMapaSituacion');
+    }, 80);
 }
 
 function generarMenuVendedores() {
-    const lista = document.getElementById('listaVendedoresHorizontal'); lista.innerHTML = '';
-    let cM = getColExacto(db.vendedores[0], ['META']); let cN = getColExacto(db.vendedores[0], ['NOMBRE']); let cA = getColExacto(db.vendedores[0], ['APELLIDO']);
-    
-    db.vendedores.filter(v => parseNum(v[cM]) > 0 && normalizarTexto(v[cN]) !== "RETIRADO").forEach(v => {
-        const li = document.createElement('li');
-        li.textContent = `${v[cN]} ${v[cA] || ''}`.trim();
-        li.onclick = () => { document.querySelectorAll('#listaVendedoresHorizontal li').forEach(el => el.classList.remove('active')); li.classList.add('active'); vendedorSeleccionadoActivo = v; cargarDataVendedor(v); };
-        lista.appendChild(li);
-    });
+    const lista = document.getElementById('listaVendedoresHorizontal');
+    lista.innerHTML = '';
+
+    if (!db.vendedores.length) return;
+
+    const cM = COLS.vendedores.meta;
+    const cN = COLS.vendedores.nombre;
+    const cA = COLS.vendedores.apellido;
+
+    db.vendedores
+        .filter(v => parseNum(v[cM]) > 0 && normalizarTexto(v[cN]) !== 'RETIRADO')
+        .forEach(v => {
+            const li = document.createElement('li');
+            li.textContent = `${v[cN] || ''} ${v[cA] || ''}`.trim();
+            li.onclick = () => {
+                document.querySelectorAll('#listaVendedoresHorizontal li').forEach(el => el.classList.remove('active'));
+                li.classList.add('active');
+                vendedorSeleccionadoActivo = v;
+                cargarDataVendedor(v);
+            };
+            lista.appendChild(li);
+        });
 }
 
 function inyectarMapaNacional(idContenedorPadre, arrayCliData) {
+    if (!db.clientes.length) return;
+
     if (!mapasInstancias[idContenedorPadre]) {
-        let map = L.map(idContenedorPadre).setView([-9.1899, -75.0151], 5);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: 'Dialex System' }).addTo(map);
-        mapasInstancias[idContenedorPadre] = { instance: map, layerGroup: L.featureGroup().addTo(map) };
+        const map = L.map(idContenedorPadre).setView([-9.1899, -75.0151], 5);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: 'Dialex System'
+        }).addTo(map);
+
+        mapasInstancias[idContenedorPadre] = {
+            instance: map,
+            layerGroup: L.featureGroup().addTo(map)
+        };
     }
 
-    let mapaObj = mapasInstancias[idContenedorPadre];
-    mapaObj.layerGroup.clearLayers(); 
+    const mapaObj = mapasInstancias[idContenedorPadre];
+    mapaObj.layerGroup.clearLayers();
 
-    let cId = getColExacto(db.clientes[0], ['ID_CLIENTE', 'RUC', 'DNI', 'Documento_Numero']); let cRz = getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'NOMBRE']); let cUb = getColExacto(db.clientes[0], ['UBICACIÓN', 'DIRECCION']);
-    let vId = getColExacto(db.ventas[0], ['ID_CLIENTE', 'RUC', 'DNI', 'Documento_Numero']); let vPr = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']);
-    let mapVentas = {}; db.ventas.forEach(v => { let i = normalizarTexto(v[vId]); if(i) mapVentas[i] = (mapVentas[i]||0) + parseNum(v[vPr]); });
+    const dicZonas = {
+        'AREQUIPA': [-16.40, -71.53],
+        'CUSCO': [-13.53, -71.96],
+        'TRUJILLO': [-8.10, -79.02],
+        'CHICLAYO': [-6.77, -79.84],
+        'PIURA': [-5.19, -80.62],
+        'IQUITOS': [-3.74, -73.25],
+        'HUANCAYO': [-12.06, -75.20],
+        'TACNA': [-18.01, -70.25],
+        'CAJAMARCA': [-7.16, -78.51],
+        'PUNO': [-15.84, -70.02],
+        'LIMA': [-12.04, -77.02],
+        'CALLAO': [-12.05, -77.13],
+        'ATE': [-12.02, -76.91],
+        'SURCO': [-12.13, -76.99],
+        'COMAS': [-11.93, -77.04]
+    };
 
-    const dicZonas = { 'AREQUIPA':[-16.40,-71.53], 'CUSCO':[-13.53,-71.96], 'TRUJILLO':[-8.10,-79.02], 'CHICLAYO':[-6.77,-79.84], 'PIURA':[-5.19,-80.62], 'IQUITOS':[-3.74,-73.25], 'HUANCAYO':[-12.06,-75.20], 'TACNA':[-18.01,-70.25], 'CAJAMARCA':[-7.16,-78.51], 'PUNO':[-15.84,-70.02], 'LIMA':[-12.04,-77.02], 'CALLAO':[-12.05,-77.13], 'ATE':[-12.02,-76.91], 'SURCO':[-12.13,-76.99], 'COMAS':[-11.93,-77.04] };
+    const ventasPorDoc = {};
+    db.ventas.forEach(v => {
+        const doc = normalizarTexto(v[COLS.ventas.documento]);
+        if (!doc) return;
+        ventasPorDoc[doc] = (ventasPorDoc[doc] || 0) + parseNum(v[COLS.ventas.total]);
+    });
 
     arrayCliData.forEach(c => {
-        let id = normalizarTexto(c[cId]); let raz = c[cRz]||'Cliente'; let ubi = normalizarTexto(c[cUb]); let vnt = mapVentas[id]||0;
-        let coord = dicZonas['LIMA']; for(let z in dicZonas) { if(ubi.includes(z)) { coord = dicZonas[z]; break; } }
-        let lat = coord[0] + (Math.sin(id.charCodeAt(0) || Math.random()) * 0.03); let lng = coord[1] + (Math.cos(id.charCodeAt(1) || Math.random()) * 0.03);
-        let color = vnt > 0 ? '#34a853' : '#ea4335';
-        let m = L.marker([lat, lng], { icon: L.divIcon({ html: `<div style="background:${color};width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.4);"></div>`, className: 'custom-pin' }) }).bindPopup(`<b>${raz}</b><br>Facturación Total: S/ ${vnt.toLocaleString()}<br><small>${c[cUb]||''}</small>`);
-        mapaObj.layerGroup.addLayer(m);
+        const doc = normalizarTexto(c[COLS.clientes.documento]);
+        const raz = c[COLS.clientes.razon] || 'Cliente';
+        const ubi = normalizarTexto(c[COLS.clientes.ubicacion]);
+        const vnt = ventasPorDoc[doc] || 0;
+
+        let coord = dicZonas['LIMA'];
+        for (const z in dicZonas) {
+            if (ubi.includes(z)) {
+                coord = dicZonas[z];
+                break;
+            }
+        }
+
+        const seedA = doc.charCodeAt(0) || 7;
+        const seedB = doc.charCodeAt(1) || 11;
+        const lat = coord[0] + (Math.sin(seedA) * 0.03);
+        const lng = coord[1] + (Math.cos(seedB) * 0.03);
+        const color = vnt > 0 ? '#34a853' : '#ea4335';
+
+        const marker = L.marker([lat, lng], {
+            icon: L.divIcon({
+                html: `<div style="background:${color};width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.4);"></div>`,
+                className: 'custom-pin'
+            })
+        }).bindPopup(
+            `<b>${raz}</b><br>Facturación Total: S/ ${vnt.toLocaleString()}<br><small>${c[COLS.clientes.ubicacion] || ''}</small>`
+        );
+
+        mapaObj.layerGroup.addLayer(marker);
     });
-    
-    if(arrayCliData.length > 0) { mapaObj.instance.fitBounds(mapaObj.layerGroup.getBounds(), {padding:[30,30], maxZoom:11}); }
+
+    if (arrayCliData.length > 0) {
+        try {
+            mapaObj.instance.fitBounds(mapaObj.layerGroup.getBounds(), { padding: [30, 30], maxZoom: 11 });
+        } catch (e) {
+            mapaObj.instance.setView([-9.1899, -75.0151], 5);
+        }
+    }
 }
 
 function obtenerInactivosReales(idVendedorFiltro) {
-    let idCliVentas = getColExacto(db.ventas[0], ['Documento_Numero', 'RUC', 'DNI', 'ID_CLIENTE']);
-    let idCliDirect = getColExacto(db.clientes[0], ['Documento_Numero', 'RUC', 'DNI', 'ID_CLIENTE']);
-    let colIdVendDir = getColExacto(db.clientes[0], ['ID_VENDEDOR']);
-    let colIdVendVentas = getColExacto(db.ventas[0], ['ID_VENDEDOR']);
-    
-    let compradoresActivosVendedor = new Set();
+    const idCliVentas = COLS.ventas.documento;
+    const idCliDirect = COLS.clientes.documento;
+    const colIdVendDir = COLS.clientes.idVendedor;
+    const colIdVendVentas = COLS.ventas.idVendedor;
+
+    const compradoresActivos = new Set();
+
     db.ventas.forEach(v => {
-        let idClie = normalizarTexto(v[idCliVentas]);
-        let idVendVenta = normalizarTexto(v[colIdVendVentas]);
-        if (idVendedorFiltro === 'GLOBAL') { if(idClie) compradoresActivosVendedor.add(idClie); } 
-        else { if(idClie && idVendVenta === idVendedorFiltro) { compradoresActivosVendedor.add(idClie); } }
+        const idClie = normalizarTexto(v[idCliVentas]);
+        const idVendVenta = normalizarTexto(v[colIdVendVentas]);
+
+        if (!idClie) return;
+
+        if (idVendedorFiltro === 'GLOBAL') {
+            compradoresActivos.add(idClie);
+        } else if (idVendVenta === idVendedorFiltro) {
+            compradoresActivos.add(idClie);
+        }
     });
 
     return db.clientes.filter(c => {
-        let idCliente = normalizarTexto(c[idCliDirect]);
-        let vendedorAsignadoEnDirectorio = normalizarTexto(c[colIdVendDir]);
-        let perteneceAlVendedor = (idVendedorFiltro === 'GLOBAL') ? true : (vendedorAsignadoEnDirectorio === idVendedorFiltro);
-        let noTieneVentasEnElContexto = idCliente && !compradoresActivosVendedor.has(idCliente);
+        const idCliente = normalizarTexto(c[idCliDirect]);
+        const vendedorAsignadoEnDirectorio = normalizarTexto(c[colIdVendDir]);
+        const perteneceAlVendedor = (idVendedorFiltro === 'GLOBAL') ? true : (vendedorAsignadoEnDirectorio === idVendedorFiltro);
+        const noTieneVentasEnElContexto = idCliente && !compradoresActivos.has(idCliente);
         return perteneceAlVendedor && noTieneVentasEnElContexto;
     });
 }
 
 function cargarDataGeneral() {
-    let vColM = getColExacto(db.vendedores[0], ['META']); let vColIdV = getColExacto(db.vendedores[0], ['ID_VENDEDOR']); let vColT = getColExacto(db.vendedores[0], ['TIPO']);
-    let vtColP = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']); let vtColIdV = getColExacto(db.ventas[0], ['ID_VENDEDOR']); let vtColF = getColExacto(db.ventas[0], ['FECHA DE VENTA', 'FECHA']);
-    let cColId = getColExacto(db.clientes[0],['ID_CLIENTE', 'RUC', 'DNI']);
-    
-    let metaT = db.vendedores.reduce((s, v) => s + parseNum(v[vColM]), 0);
-    let vtaT = db.ventas.reduce((s, v) => s + parseNum(v[vtColP]), 0);
-    let totalClientesUnicos = new Set(db.clientes.map(c => normalizarTexto(c[cColId]))).size;
-    let inactivosGlobales = obtenerInactivosReales('GLOBAL'); // Limpio solo con el número
-    
+    if (!db.vendedores.length || !db.ventas.length || !db.clientes.length) return;
+
+    const metaT = db.vendedores.reduce((s, v) => s + parseNum(v[COLS.vendedores.meta]), 0);
+    const vtaT = db.ventas.reduce((s, v) => s + parseNum(v[COLS.ventas.total]), 0);
+    const inactivosGlobales = obtenerInactivosReales('GLOBAL');
+
     document.getElementById('kpiGeneral').innerHTML = `
-        <div class="kpi-box destacado"><h4>Venta Global Lograda</h4><span>${formatearMoneda(vtaT)}</span></div>
-        <div class="kpi-box"><h4>Meta Global Programada</h4><span style="color:#202124">${formatearMoneda(metaT)}</span></div>
-        <div class="kpi-box kpi-clickable" onclick="mostrarModalInactivos('GLOBAL', 'General')"><h4>Clientes Inactivos</h4><span style="color:#d93025">${inactivosGlobales.length}</span></div>
+        <div class="kpi-box destacado">
+            <h4>Venta Global Lograda</h4>
+            <span>${formatearMoneda(vtaT)}</span>
+        </div>
+        <div class="kpi-box">
+            <h4>Meta Global Programada</h4>
+            <span style="color:#202124">${formatearMoneda(metaT)}</span>
+        </div>
+        <div class="kpi-box kpi-clickable" onclick="mostrarModalInactivos('GLOBAL', 'General')">
+            <h4>Clientes Inactivos</h4>
+            <span style="color:#d93025">${inactivosGlobales.length}</span>
+        </div>
     `;
 
-    let pctGen = metaT > 0 ? (vtaT / metaT) * 100 : 0;
+    const pctGen = metaT > 0 ? (vtaT / metaT) * 100 : 0;
     document.getElementById('textoVelocimetroGeneral').textContent = pctGen.toFixed(1) + '%';
-    destroyChart('chartVelocimetroGeneral');
-    charts['chartVelocimetroGeneral'] = new Chart(document.getElementById('chartVelocimetroGeneral').getContext('2d'), { type:'doughnut', data:{ datasets:[{ data:[vtaT, Math.max(0, metaT - vtaT)], backgroundColor:['#34a853','#ea4335'], borderWidth:0 }] }, options:{ responsive:true, maintainAspectRatio:false, rotation:-90, circumference:180, cutout:'75%', plugins:{legend:{display:false}} } });
 
-    // Corrección: CANALES DINÁMICOS
-    let can = {};
+    crearOActualizarChart('chartVelocimetroGeneral', {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [vtaT, Math.max(0, metaT - vtaT)],
+                backgroundColor: ['#34a853', '#ea4335'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            rotation: -90,
+            circumference: 180,
+            cutout: '75%',
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    const canales = {};
     db.ventas.forEach(v => {
-        let vend = db.vendedores.find(vd => normalizarTexto(vd[vColIdV]) === normalizarTexto(v[vtColIdV]));
-        let t = vend && vend[vColT] ? normalizarTexto(vend[vColT]) : 'OTROS';
-        if (t === '') t = 'SIN ASIGNAR';
-        can[t] = (can[t] || 0) + parseNum(v[vtColP]);
-    });
-    
-    let coloresDona = ['#1a73e8', '#fbbc05', '#34a853', '#ea4335', '#9aa0a6', '#ff6d01'];
-    destroyChart('chartDonaGeneral');
-    charts['chartDonaGeneral'] = new Chart(document.getElementById('chartDonaGeneral').getContext('2d'), { 
-        type:'pie', 
-        data:{ labels: Object.keys(can), datasets:[{ data: Object.values(can), backgroundColor: coloresDona.slice(0, Object.keys(can).length) }] }, 
-        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} } 
+        const vend = db.vendedores.find(vd => normalizarTexto(vd[COLS.vendedores.id]) === normalizarTexto(v[COLS.ventas.idVendedor]));
+        let t = vend && vend[COLS.vendedores.tipo] ? normalizarTexto(vend[COLS.vendedores.tipo]) : 'OTROS';
+        if (!t) t = 'SIN ASIGNAR';
+        canales[t] = (canales[t] || 0) + parseNum(v[COLS.ventas.total]);
     });
 
-    let daily = {}; db.ventas.forEach(v => { let fObj = parseFechaEstricta(v[vtColF]); if(fObj){ daily[fObj.string] = { val: (daily[fObj.string]?.val || 0) + parseNum(v[vtColP]), sort: fObj.sortValue }; } });
-    let arrFechas = Object.keys(daily).map(k => ({ label: k, ...daily[k] })).sort((a,b) => a.sort - b.sort);
-    destroyChart('chartLineasGeneral');
-    charts['chartLineasGeneral'] = new Chart(document.getElementById('chartLineaGeneral').getContext('2d'), { type:'line', data:{ labels:arrFechas.map(f => f.label), datasets:[{ label:'Ingresos Diarios (S/)', data:arrFechas.map(f => f.val), borderColor:'#1a73e8', backgroundColor:'rgba(26, 115, 232, 0.08)', fill:true, tension:0.1 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} } });
+    const coloresDona = ['#1a73e8', '#fbbc05', '#34a853', '#ea4335', '#9aa0a6', '#ff6d01'];
+    crearOActualizarChart('chartDonaGeneral', {
+        type: 'pie',
+        data: {
+            labels: Object.keys(canales),
+            datasets: [{
+                data: Object.values(canales),
+                backgroundColor: coloresDona.slice(0, Object.keys(canales).length)
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } }
+        }
+    });
 
-    // Corrección: RANKING APILADO 100%
-    let rank = db.vendedores.filter(v => parseNum(v[vColM]) > 0).map(v => {
-        let tot = db.ventas.filter(vt => normalizarTexto(vt[vtColIdV]) === normalizarTexto(v[vColIdV])).reduce((s, vt) => s + parseNum(vt[vtColP]), 0);
-        return { n: v[getColExacto(v, ['NOMBRE'])], p: (tot / parseNum(v[vColM])) * 100 };
-    }).sort((a, b) => b.p - a.p);
+    const daily = {};
+    db.ventas.forEach(v => {
+        const fObj = parseFechaEstricta(v[COLS.ventas.fecha]);
+        if (fObj) {
+            if (!daily[fObj.string]) daily[fObj.string] = { val: 0, sort: fObj.sortValue };
+            daily[fObj.string].val += parseNum(v[COLS.ventas.total]);
+        }
+    });
 
-    destroyChart('chartRankingMeta');
-    charts['chartRankingMeta'] = new Chart(document.getElementById('chartRankingMeta').getContext('2d'), { 
-        type:'bar', 
-        data:{ 
-            labels: rank.map(r => r.n), 
-            datasets:[
-                { label:'% Logrado', data: rank.map(r => Math.min(r.p, 100).toFixed(1)), backgroundColor:'#1a73e8' },
-                { label:'% Faltante', data: rank.map(r => Math.max(0, 100 - r.p).toFixed(1)), backgroundColor:'#dadce0' }
-            ] 
-        }, 
-        options:{ 
-            responsive:true, 
-            maintainAspectRatio:false, 
-            scales:{ 
+    const arrFechas = Object.keys(daily)
+        .map(k => ({ label: k, ...daily[k] }))
+        .sort((a, b) => a.sort - b.sort);
+
+    crearOActualizarChart('chartLineaGeneral', {
+        type: 'line',
+        data: {
+            labels: arrFechas.map(f => f.label),
+            datasets: [{
+                label: 'Ingresos Diarios (S/)',
+                data: arrFechas.map(f => f.val),
+                borderColor: '#1a73e8',
+                backgroundColor: 'rgba(26, 115, 232, 0.08)',
+                fill: true,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    const rank = db.vendedores
+        .filter(v => parseNum(v[COLS.vendedores.meta]) > 0)
+        .map(v => {
+            const idVend = normalizarTexto(v[COLS.vendedores.id]);
+            const tot = (cache.ventasPorVendedor[idVend] || []).reduce((s, vt) => s + parseNum(vt[COLS.ventas.total]), 0);
+            return {
+                n: v[COLS.vendedores.nombre] || '',
+                p: (tot / parseNum(v[COLS.vendedores.meta])) * 100
+            };
+        })
+        .sort((a, b) => b.p - a.p);
+
+    crearOActualizarChart('chartRankingMeta', {
+        type: 'bar',
+        data: {
+            labels: rank.map(r => r.n),
+            datasets: [
+                {
+                    label: '% Logrado',
+                    data: rank.map(r => Math.min(r.p, 100)),
+                    backgroundColor: '#1a73e8'
+                },
+                {
+                    label: '% Faltante',
+                    data: rank.map(r => Math.max(0, 100 - r.p)),
+                    backgroundColor: '#dadce0'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
                 x: { stacked: true },
                 y: { stacked: true, max: 100 }
             },
             plugins: { legend: { display: true, position: 'bottom' } }
-        } 
+        }
     });
 
     inyectarMapaNacional('ContenedorMapaGeneral', db.clientes);
 }
 
 function cargarDataVendedor(vdData) {
+    if (!vdData) return;
+
     document.getElementById('estadoVendedorSeleccion').style.display = 'none';
     document.getElementById('contenidoProductividad').style.display = 'block';
-    
-    let idV = normalizarTexto(vdData[getColExacto(vdData, ['ID_VENDEDOR'])]);
-    let nombreVendedor = vdData[getColExacto(vdData, ['NOMBRE'])];
-    document.getElementById('tituloDashboard').textContent = `Análisis de Rendimiento: ${nombreVendedor}`;
-    
-    let m = parseNum(vdData[getColExacto(vdData, ['META'])]);
-    let vtColP = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']);
-    let sVt = db.ventas.filter(v => normalizarTexto(v[getColExacto(v, ['ID_VENDEDOR'])]) === idV);
-    let totV = sVt.reduce((s, v) => s + parseNum(v[vtColP]), 0);
-    
-    let sCli = db.clientes.filter(c => normalizarTexto(c[getColExacto(c, ['ID_VENDEDOR'])]) === idV);
-    let inactivosCartera = obtenerInactivosReales(idV);
 
-    // Corrección: Solo el número de inactivos
+    const idV = normalizarTexto(vdData[COLS.vendedores.id]);
+    const nombreVendedor = [vdData[COLS.vendedores.nombre], vdData[COLS.vendedores.apellido]].filter(Boolean).join(' ').trim() || 'Vendedor';
+    document.getElementById('tituloDashboard').textContent = `Análisis de Rendimiento: ${nombreVendedor}`;
+
+    const meta = parseNum(vdData[COLS.vendedores.meta]);
+    const ventasVendedor = cache.ventasPorVendedor[idV] || [];
+    const clientesVendedor = cache.clientesPorVendedor[idV] || [];
+    const inactivosCartera = obtenerInactivosReales(idV);
+
+    const totV = ventasVendedor.reduce((s, v) => s + parseNum(v[COLS.ventas.total]), 0);
+    const activosCount = Math.max(0, clientesVendedor.length - inactivosCartera.length);
+
     document.getElementById('kpiVendedor').innerHTML = `
-        <div class="kpi-box destacado"><h4>Cuota Lograda</h4><span>${formatearMoneda(totV)}</span></div>
-        <div class="kpi-box"><h4>Meta Asignada</h4><span style="color:#333">${formatearMoneda(m)}</span></div>
+        <div class="kpi-box destacado">
+            <h4>Cuota Lograda</h4>
+            <span>${formatearMoneda(totV)}</span>
+        </div>
+        <div class="kpi-box">
+            <h4>Meta Asignada</h4>
+            <span style="color:#333">${formatearMoneda(meta)}</span>
+        </div>
         <div class="kpi-box kpi-clickable" style="border-left: 4px solid #ea4335;" onclick="mostrarModalInactivos('${idV}', '${nombreVendedor}')">
-            <h4>Clientes Inactivos</h4><span style="color:#d93025">${inactivosCartera.length}</span>
+            <h4>Clientes Inactivos</h4>
+            <span style="color:#d93025">${inactivosCartera.length}</span>
         </div>
     `;
 
-    let pctV = m > 0 ? (totV / m) * 100 : 0;
+    const pctV = meta > 0 ? (totV / meta) * 100 : 0;
     document.getElementById('textoVelocimetroVendedor').textContent = pctV.toFixed(1) + '%';
-    destroyChart('chartVelocimetroVendedor');
-    charts['chartVelocimetroVendedor'] = new Chart(document.getElementById('chartVelocimetroVendedor').getContext('2d'), { type:'doughnut', data:{ datasets:[{ data:[totV, Math.max(0, m - totV)], backgroundColor:['#34a853','#ddd'], borderWidth:0 }] }, options:{ responsive:true, maintainAspectRatio:false, rotation:-90, circumference:180, cutout:'75%', plugins:{legend:{display:false}} } });
 
-    // Corrección: Gráfico Dona cambiado a Activos vs Inactivos
-    let activosCount = sCli.length - inactivosCartera.length;
-    destroyChart('chartDonaVendedor');
-    charts['chartDonaVendedor'] = new Chart(document.getElementById('chartDonaVendedor').getContext('2d'), { 
-        type:'pie', 
-        data:{ labels:['Activos Comprando', 'Inactivos (Riesgo)'], datasets:[{ data:[activosCount, inactivosCartera.length], backgroundColor:['#34a853','#ea4335'] }] }, 
-        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} } 
+    crearOActualizarChart('chartVelocimetroVendedor', {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [totV, Math.max(0, meta - totV)],
+                backgroundColor: ['#34a853', '#ddd'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            rotation: -90,
+            circumference: 180,
+            cutout: '75%',
+            plugins: { legend: { display: false } }
+        }
     });
 
-    let pCId = getColExacto(db.productos[0], ['ID_VENDEDOR']); let pCNom = getColExacto(db.productos[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']);
-    let cU = {}; let cC = {};
-    db.productos.filter(p => normalizarTexto(p[pCId]) === idV).forEach(p => { let n = p[pCNom]; let u = parseNum(p[getColExacto(p, ['CANTIDAD UNID', 'UNID'])]); let c = parseNum(p[getColExacto(p, ['CANTIDAD CAJA', 'CAJA'])]); if(n) { if(u > 0) cU[n] = (cU[n]||0) + u; if(c > 0) cC[n] = (cC[n]||0) + c; } });
-    
-    const renderTable = (id, obj) => { let tb = document.querySelector(`#${id} tbody`); tb.innerHTML = ''; let keys = Object.keys(obj).sort((a,b) => obj[b] - obj[a]).slice(0, 5); if(keys.length === 0){ tb.innerHTML = `<tr><td colspan="2" style="text-align:center; color:#999;">Sin movimientos en este periodo</td></tr>`; } else { keys.forEach(k => tb.innerHTML += `<tr><td>${k}</td><td class="num-col">${obj[k].toLocaleString()}</td></tr>`); } };
-    renderTable('tablaProdUnid', cU); renderTable('tablaProdCaja', cC);
+    crearOActualizarChart('chartDonaVendedor', {
+        type: 'pie',
+        data: {
+            labels: ['Activos Comprando', 'Inactivos (Riesgo)'],
+            datasets: [{
+                data: [activosCount, inactivosCartera.length],
+                backgroundColor: ['#34a853', '#ea4335']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } }
+        }
+    });
 
-    inyectarMapaNacional('ContenedorMapaVendedor', sCli);
+    const pColN = COLS.productos.producto;
+    const pColU = COLS.productos.unid;
+    const pColC = COLS.productos.caja;
+
+    const cU = {};
+    const cC = {};
+
+    (cache.productosPorVendedor[idV] || []).forEach(p => {
+        const n = p[pColN];
+        const u = parseNum(p[pColU]);
+        const c = parseNum(p[pColC]);
+
+        if (n) {
+            if (u > 0) cU[n] = (cU[n] || 0) + u;
+            if (c > 0) cC[n] = (cC[n] || 0) + c;
+        }
+    });
+
+    const renderTable = (id, obj, emptyMsg) => {
+        const tb = document.querySelector(`#${id} tbody`);
+        tb.innerHTML = '';
+        const keys = Object.keys(obj).sort((a, b) => obj[b] - obj[a]).slice(0, 5);
+
+        if (keys.length === 0) {
+            tb.innerHTML = `<tr><td colspan="2" style="text-align:center; color:#999;">${emptyMsg}</td></tr>`;
+            return;
+        }
+
+        const frag = document.createDocumentFragment();
+        keys.forEach(k => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${k}</td><td class="num-col">${obj[k].toLocaleString()}</td>`;
+            frag.appendChild(tr);
+        });
+        tb.appendChild(frag);
+    };
+
+    renderTable('tablaProdUnid', cU, 'Sin movimientos en este periodo');
+    renderTable('tablaProdCaja', cC, 'Sin movimientos en este periodo');
+
+    inyectarMapaNacional('ContenedorMapaVendedor', clientesVendedor);
 }
 
 function cargarDataSituacion() {
-    let vtColP = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']); let vtColR = getColExacto(db.ventas[0], ['RAZÓN SOCIAL', 'RAZON']); 
-    let vT = db.ventas.reduce((s,v) => s + parseNum(v[vtColP]), 0); let lV = db.ventas.length;
-    document.getElementById('kpiTicketPromedio').textContent = formatearMoneda(lV > 0 ? vT / lV : 0);
-    
-    let cC = {}; db.ventas.forEach(v => { let r = normalizarTexto(v[vtColR]); if(r) cC[r] = (cC[r]||0) + parseNum(v[vtColP]); });
-    document.getElementById('kpiFrecuencia').textContent = Object.keys(cC).length > 0 ? (lV / Object.keys(cC).length).toFixed(1) : '0.0';
+    if (!db.ventas.length || !db.clientes.length) return;
 
-    let riesgoContador = obtenerInactivosReales('GLOBAL').length;
+    const vT = db.ventas.reduce((s, v) => s + parseNum(v[COLS.ventas.total]), 0);
+    const lV = db.ventas.length;
+    document.getElementById('kpiTicketPromedio').textContent = formatearMoneda(lV > 0 ? vT / lV : 0);
+
+    const ventasPorCliente = {};
+    db.ventas.forEach(v => {
+        const doc = normalizarTexto(v[COLS.ventas.documento]);
+        const raz = normalizarTexto(v[COLS.ventas.razon]);
+        const key = doc || raz;
+        if (!key) return;
+        ventasPorCliente[key] = (ventasPorCliente[key] || 0) + parseNum(v[COLS.ventas.total]);
+    });
+
+    document.getElementById('kpiFrecuencia').textContent = Object.keys(ventasPorCliente).length > 0
+        ? (lV / Object.keys(ventasPorCliente).length).toFixed(1)
+        : '0.0';
+
+    const riesgoContador = obtenerInactivosReales('GLOBAL').length;
     document.getElementById('kpiRiesgo').textContent = riesgoContador;
 
-    let arrABC = Object.keys(cC).map(k => ({n:k, t:cC[k]})).sort((a,b) => b.t - a.t);
-    let tb = document.querySelector('#tablaABC tbody'); tb.innerHTML = ''; let sAc = 0;
-    arrABC.forEach(c => { sAc += c.t; let pct = (sAc / vT) * 100; let sg = pct <= 80 ? 'A (Top)' : (pct <= 95 ? 'B (Medio)' : 'C (Crítico)'); let cs = pct <= 80 ? 'badge-a' : (pct <= 95 ? 'badge-b' : 'badge-c'); tb.innerHTML += `<tr><td>${c.n}</td><td><span class="badge ${cs}">${sg}</span></td><td class="num-col">${formatearMoneda(c.t)}</td></tr>`; });
+    const arrABC = Object.keys(ventasPorCliente)
+        .map(k => ({ n: k, t: ventasPorCliente[k] }))
+        .sort((a, b) => b.t - a.t);
 
-    let clientesActivosSegmento = db.clientes.filter(c => { let docId = normalizarTexto(c[getColExacto(c, ['Documento_Numero', 'RUC', 'DNI'])]); return docId && cC[docId]; });
-    inyectarMapaNacional('ContenedorMapaSituacion', clientesActivosSegmento.length ? clientesActivosSegmento : db.clientes);
+    const tb = document.querySelector('#tablaABC tbody');
+    tb.innerHTML = '';
+
+    let sAc = 0;
+    const frag = document.createDocumentFragment();
+
+    arrABC.forEach(c => {
+        sAc += c.t;
+        const pct = vT > 0 ? (sAc / vT) * 100 : 0;
+        const sg = pct <= 80 ? 'A (Top)' : (pct <= 95 ? 'B (Medio)' : 'C (Crítico)');
+        const cs = pct <= 80 ? 'badge-a' : (pct <= 95 ? 'badge-b' : 'badge-c');
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${c.n}</td><td><span class="badge ${cs}">${sg}</span></td><td class="num-col">${formatearMoneda(c.t)}</td>`;
+        frag.appendChild(tr);
+    });
+
+    tb.appendChild(frag);
+
+    const clientesActivosSegmento = db.clientes.filter(c => {
+        const doc = normalizarTexto(c[COLS.clientes.documento]);
+        const raz = normalizarTexto(c[COLS.clientes.razon]);
+        return (doc && ventasPorCliente[doc]) || (raz && ventasPorCliente[raz]);
+    });
+
+    inyectarMapaNacional(
+        'ContenedorMapaSituacion',
+        clientesActivosSegmento.length ? clientesActivosSegmento : db.clientes
+    );
 }
 
 function llenarTablaDirectorio() {
-    let tb = document.querySelector('#tablaDirectorioClientes tbody'); tb.innerHTML = '';
-    let docC = getColExacto(db.clientes[0], ['Documento_Numero', 'RUC', 'DNI']); let razC = getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'NOMBRE']);
-    db.clientes.forEach(c => { let d = c[docC]||''; let r = c[razC]||''; if(d || r) { let tr = document.createElement('tr'); tr.className = 'fila-cliente'; tr.innerHTML = `<td>${d}</td><td>${r}</td>`; tr.onclick = () => mostrarDetalleCliente(d, r, tr); tb.appendChild(tr); } });
+    const tb = document.querySelector('#tablaDirectorioClientes tbody');
+    tb.innerHTML = '';
+
+    const docC = COLS.clientes.documento;
+    const razC = COLS.clientes.razon;
+
+    const frag = document.createDocumentFragment();
+
+    db.clientes.forEach(c => {
+        const d = c[docC] || '';
+        const r = c[razC] || '';
+
+        if (d || r) {
+            const tr = document.createElement('tr');
+            tr.className = 'fila-cliente';
+            tr.innerHTML = `<td>${d}</td><td>${r}</td>`;
+            tr.onclick = () => mostrarDetalleCliente(d, r, tr);
+            frag.appendChild(tr);
+        }
+    });
+
+    tb.appendChild(frag);
 }
 
 function filtrarDirectorioClientes() {
-    let input = normalizarTexto(document.getElementById("inputBusquedaCliente").value);
-    document.querySelectorAll('#tablaDirectorioClientes .fila-cliente').forEach(f => { f.style.display = normalizarTexto(f.textContent).includes(input) ? "" : "none"; });
+    const input = normalizarTexto(document.getElementById('inputBusquedaCliente').value);
+    document.querySelectorAll('#tablaDirectorioClientes .fila-cliente').forEach(f => {
+        f.style.display = normalizarTexto(f.textContent).includes(input) ? '' : 'none';
+    });
 }
 
 function mostrarDetalleCliente(doc, razon, trActivo) {
-    document.querySelectorAll('.fila-cliente').forEach(f => f.classList.remove('activa')); if(trActivo) trActivo.classList.add('activa');
-    let panel = document.getElementById('panelDetalleCliente'); panel.style.display = 'flex'; panel.style.flexDirection = 'column';
-    if (window.innerWidth <= 1024) { panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-    
-    document.getElementById('detalleNombreCliente').textContent = razon || 'Cliente Innominado'; document.getElementById('detalleDocCliente').textContent = doc || 'Sin Identificación';
+    document.querySelectorAll('.fila-cliente').forEach(f => f.classList.remove('activa'));
+    if (trActivo) trActivo.classList.add('activa');
 
-    let vColR = getColExacto(db.ventas[0], ['RAZÓN SOCIAL', 'RAZON']); let vColD = getColExacto(db.ventas[0], ['Documento_Numero', 'RUC', 'DNI']); let vColP = getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']); let vColF = getColExacto(db.ventas[0], ['FECHA DE VENTA', 'FECHA']);
-    let susVtas = db.ventas.filter(v => { let vDoc = normalizarTexto(v[vColD]); let vRaz = normalizarTexto(v[vColR]); return (doc && vDoc === normalizarTexto(doc)) || (razon && vRaz === normalizarTexto(razon)); });
-    
-    let totalFacturado = susVtas.reduce((s, v) => s + parseNum(v[vColP]), 0);
+    const panel = document.getElementById('panelDetalleCliente');
+    panel.style.display = 'flex';
+    panel.style.flexDirection = 'column';
+
+    if (window.innerWidth <= 1024) {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    document.getElementById('detalleNombreCliente').textContent = razon || 'Cliente Innominado';
+    document.getElementById('detalleDocCliente').textContent = doc || 'Sin Identificación';
+
+    const susVtas = db.ventas.filter(v => {
+        const vDoc = normalizarTexto(v[COLS.ventas.documento]);
+        const vRaz = normalizarTexto(v[COLS.ventas.razon]);
+        return (doc && vDoc === normalizarTexto(doc)) || (razon && vRaz === normalizarTexto(razon));
+    });
+
+    const totalFacturado = susVtas.reduce((s, v) => s + parseNum(v[COLS.ventas.total]), 0);
     document.getElementById('detalleTotalVenta').textContent = formatearMoneda(totalFacturado);
-    
-    let estBadge = totalFacturado > 0 ? '<span class="badge badge-activo">ACTIVO COMPRADOR</span>' : '<span class="badge badge-inactivo">INACTIVO SIN COMPRAS</span>';
+
+    const estBadge = totalFacturado > 0
+        ? '<span class="badge badge-activo">ACTIVO COMPRADOR</span>'
+        : '<span class="badge badge-inactivo">INACTIVO SIN COMPRAS</span>';
     document.getElementById('detalleEstadoCli').innerHTML = estBadge;
 
-    let hist = {}; susVtas.forEach(v => { let fObj = parseFechaEstricta(v[vColF]); if(fObj){ hist[fObj.string] = { val: (hist[fObj.string]?.val || 0) + parseNum(v[vColP]), sort: fObj.sortValue }; } });
-    let hArr = Object.keys(hist).map(k => ({ label: k, ...hist[k] })).sort((a,b) => a.sort - b.sort);
+    const hist = {};
+    susVtas.forEach(v => {
+        const fObj = parseFechaEstricta(v[COLS.ventas.fecha]);
+        if (fObj) {
+            if (!hist[fObj.string]) hist[fObj.string] = { val: 0, sort: fObj.sortValue };
+            hist[fObj.string].val += parseNum(v[COLS.ventas.total]);
+        }
+    });
 
-    destroyChart('chartClienteHistorial');
-    charts['chartClienteHistorial'] = new Chart(document.getElementById('chartClienteHistorial').getContext('2d'), { type:'bar', data:{ labels:hArr.map(f => f.label), datasets:[{ label:'Compras S/', data:hArr.map(f => f.val), backgroundColor:'#34a853', borderRadius:4 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} } });
+    const hArr = Object.keys(hist)
+        .map(k => ({ label: k, ...hist[k] }))
+        .sort((a, b) => a.sort - b.sort);
 
-    let pColD = getColExacto(db.productos[0], ['Documento_Numero', 'RUC', 'DNI']); let pColN = getColExacto(db.productos[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']); let pColC = getColExacto(db.productos[0], ['CANTIDAD CAJA', 'CAJA']); let pColU = getColExacto(db.productos[0], ['CANTIDAD UNID', 'UNID']);
-    let prds = {}; db.productos.filter(p => doc && normalizarTexto(p[pColD]) === normalizarTexto(doc)).forEach(p => { let n = p[pColN]; let u = parseNum(p[pColU]); let c = parseNum(p[pColC]); if(n){ if(!prds[n]) prds[n] = {u:0, c:0}; prds[n].u += u; prds[n].c += c; } });
-    
-    let tb = document.querySelector('#tablaClienteProductos tbody'); tb.innerHTML = ''; let keysPrd = Object.keys(prds).sort((a,b) => (prds[b].u + prds[b].c) - (prds[a].u + prds[a].c));
-    if(keysPrd.length === 0) { tb.innerHTML = `<tr><td colspan="2" style="text-align:center; color:#999;">Sin transacciones de ítems en BD</td></tr>`; } else { keysPrd.forEach(k => { let sumStr = prds[k].c > 0 ? `${prds[k].c} cjs` : `${prds[k].u} und`; tb.innerHTML += `<tr><td>${k}</td><td class="num-col">${sumStr}</td></tr>`; }); }
+    crearOActualizarChart('chartClienteHistorial', {
+        type: 'bar',
+        data: {
+            labels: hArr.map(f => f.label),
+            datasets: [{
+                label: 'Compras S/',
+                data: hArr.map(f => f.val),
+                backgroundColor: '#34a853',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    const prds = {};
+    const pColD = COLS.productos.documento;
+    const pColN = COLS.productos.producto;
+    const pColC = COLS.productos.caja;
+    const pColU = COLS.productos.unid;
+
+    db.productos.filter(p => doc && normalizarTexto(p[pColD]) === normalizarTexto(doc)).forEach(p => {
+        const n = p[pColN];
+        const u = parseNum(p[pColU]);
+        const c = parseNum(p[pColC]);
+
+        if (n) {
+            if (!prds[n]) prds[n] = { u: 0, c: 0 };
+            prds[n].u += u;
+            prds[n].c += c;
+        }
+    });
+
+    const tb = document.querySelector('#tablaClienteProductos tbody');
+    tb.innerHTML = '';
+
+    const keysPrd = Object.keys(prds).sort((a, b) => (prds[b].u + prds[b].c) - (prds[a].u + prds[a].c));
+
+    if (keysPrd.length === 0) {
+        tb.innerHTML = `<tr><td colspan="2" style="text-align:center; color:#999;">Sin transacciones de ítems en BD</td></tr>`;
+    } else {
+        const frag = document.createDocumentFragment();
+        keysPrd.forEach(k => {
+            const tr = document.createElement('tr');
+            const sumStr = prds[k].c > 0 ? `${prds[k].c} cjs` : `${prds[k].u} und`;
+            tr.innerHTML = `<td>${k}</td><td class="num-col">${sumStr}</td>`;
+            frag.appendChild(tr);
+        });
+        tb.appendChild(frag);
+    }
 }
 
-function mostrarModalInactivos(idVendedor, nombreVendedor) { 
+function mostrarModalInactivos(idVendedor, nombreVendedor) {
     document.getElementById('tituloModalInactivos').textContent = `Clientes Inactivos de: ${nombreVendedor}`;
-    let tb = document.querySelector('#tablaInactivos tbody'); tb.innerHTML = '';
-    
-    let clientesInactivos = obtenerInactivosReales(idVendedor);
-    let docC = getColExacto(db.clientes[0], ['Documento_Numero', 'RUC', 'DNI']); let razC = getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'NOMBRE']); let estC = getColExacto(db.clientes[0], ['ESTADO DE VENTA', 'ESTADO']);
+    const tb = document.querySelector('#tablaInactivos tbody');
+    tb.innerHTML = '';
 
-    if(clientesInactivos.length === 0) { tb.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:#666;">¡Felicidades! Toda la cartera registra compras efectivas.</td></tr>`; } 
-    else { clientesInactivos.forEach(c => { let est = c[estC] || 'INACTIVO'; tb.innerHTML += `<tr><td>${c[docC]||'---'}</td><td>${c[razC]||'---'}</td><td><span class="badge badge-inactivo">${est}</span></td></tr>`; }); }
-    document.getElementById('modalInactivos').style.display = 'flex'; 
+    const clientesInactivos = obtenerInactivosReales(idVendedor);
+
+    const docC = COLS.clientes.documento;
+    const razC = COLS.clientes.razon;
+    const estC = COLS.clientes.estado;
+
+    if (clientesInactivos.length === 0) {
+        tb.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:#666;">¡Felicidades! Toda la cartera registra compras efectivas.</td></tr>`;
+    } else {
+        const frag = document.createDocumentFragment();
+        clientesInactivos.forEach(c => {
+            const est = c[estC] || 'INACTIVO';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${c[docC] || '---'}</td><td>${c[razC] || '---'}</td><td><span class="badge badge-inactivo">${est}</span></td>`;
+            frag.appendChild(tr);
+        });
+        tb.appendChild(frag);
+    }
+
+    document.getElementById('modalInactivos').style.display = 'flex';
 }
 
-function cerrarModalInactivos() { document.getElementById('modalInactivos').style.display = 'none'; }
+function cerrarModalInactivos() {
+    document.getElementById('modalInactivos').style.display = 'none';
+}
