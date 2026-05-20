@@ -4,7 +4,36 @@ const urls = {
     productos: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ70FuTF7cerHOQSNXrIcLFDFRprfHAV728CeKLsmNZdlxq3rA_SunZ6ILxYFtZVHVfQdphUycfNbUC/pub?gid=1241891503&single=true&output=csv',
     clientes: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ70FuTF7cerHOQSNXrIcLFDFRprfHAV728CeKLsmNZdlxq3rA_SunZ6ILxYFtZVHVfQdphUycfNbUC/pub?gid=1344644608&single=true&output=csv'
 };
+// ... [ Mantén tus URLs igual ] ...
+let charts = {}; // Contenedor global de instancias para destruirlas antes de crear
 
+function destroyChart(id) {
+    if (charts[id]) {
+        charts[id].destroy();
+        charts[id] = null;
+    }
+}
+
+// Ejemplo de cómo dibujar un gráfico sin que "clashee"
+function dibujarVelocimetro(idCanvas, porcentaje) {
+    destroyChart(idCanvas); // DESTRUCCIÓN ANTES DE CREACIÓN
+    const ctx = document.getElementById(idCanvas).getContext('2d');
+    charts[idCanvas] = new Chart(ctx, {
+        type: 'doughnut',
+        data: { datasets: [{ data: [porcentaje, 100-porcentaje], backgroundColor: ['#34a853', '#ddd'] }] },
+        options: { responsive: true, maintainAspectRatio: false, rotation: -90, circumference: 180, cutout: '70%' }
+    });
+}
+
+// Función que corrige el selector de vendedores para que no ocupe espacio
+function cambiarModulo(modulo, el) {
+    document.querySelectorAll('.modulos-list li').forEach(l => l.classList.remove('active'));
+    if(el) el.classList.add('active');
+    
+    document.getElementById('selectorVendedorMobile').style.display = (modulo === 'productividad') ? 'block' : 'none';
+    
+    // ... [ RESTO DE TU LÓGICA ] ...
+}
 let db = { vendedores: [], ventas: [], productos: [], clientes: [] };
 let graficos = { genV: null, genD: null, genL: null, genR: null, vendV: null, vendD: null, cliL: null };
 
