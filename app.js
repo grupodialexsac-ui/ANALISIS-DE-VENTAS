@@ -472,7 +472,7 @@ function inyectarMapaNacional(idContenedorPadre, arrayCliData) {
 
     }, 120);
 }
-
+}
 function obtenerInactivosReales(idVendedorFiltro) {
     const idCliVentas = COLS.ventas.documento;
     const idCliDirect = COLS.clientes.documento;
