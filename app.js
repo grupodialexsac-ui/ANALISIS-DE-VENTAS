@@ -10,6 +10,7 @@ let charts = {};
 let mapasInstancias = {};
 let moduloActual = 'general';
 let vendedorSeleccionadoActivo = null;
+let appPreloadedStatus = false; // Control de precarga global
 
 let COLS = { vendedores: {}, ventas: {}, productos: {}, clientes: {} };
 
@@ -96,8 +97,11 @@ function verificarPassword() {
         document.getElementById('loginScreen').style.opacity = '0';
         setTimeout(() => {
             document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('loadingScreen').style.display = 'flex';
-            inicializarApp();
+            if (appPreloadedStatus) {
+                lanzarDashboardDirecto();
+            } else {
+                document.getElementById('loadingScreen').style.display = 'flex';
+            }
         }, 300);
     } else {
         document.getElementById('loginError').style.display = 'block';
@@ -199,6 +203,28 @@ function generarIndices() {
     });
 }
 
+// CÁLCULO DE LA ÚLTIMA FECHA DE VENTA REGISTRADA
+function obtenerUltimaFechaVenta() {
+    if (!db.ventas || !db.ventas.length) return '---';
+    let maxTimestamp = 0;
+    let fechaFormateadaFinal = '---';
+
+    db.ventas.forEach(v => {
+        const fStr = v[COLS.ventas.fecha];
+        if (!fStr) return;
+        const infoFecha = parseFechaEstricta(fStr);
+        if (infoFecha && infoFecha.sortValue > maxTimestamp) {
+            maxTimestamp = infoFecha.sortValue;
+            const d = new Date(maxTimestamp);
+            const dia = String(d.getDate()).padStart(2, '0');
+            const mes = String(d.getMonth() + 1).padStart(2, '0');
+            const anio = d.getFullYear();
+            fechaFormateadaFinal = `${dia}/${mes}/${anio}`;
+        }
+    });
+    return fechaFormateadaFinal;
+}
+
 function crearOActualizarChart(id, config) {
     const canvas = document.getElementById(id);
     if (!canvas) return null;
@@ -212,6 +238,7 @@ function crearOActualizarChart(id, config) {
     return charts[id];
 }
 
+// ARRANQUE AUTOMÁTICO ASÍNCRONO EN SEGUNDO PLANO
 async function inicializarApp() {
     try {
         const [resVend, resVent, resProd, resCli] = await Promise.all([
@@ -226,19 +253,39 @@ async function inicializarApp() {
         generarIndices();
         generarMenuVendedores();
 
-        cambiarModulo('general', document.querySelector('.modulos-list li'));
+        // Extraer última fecha y pintar el login-box inmediatamente
+        const ultimaVentaFecha = obtenerUltimaFechaVenta();
+        const loginLabel = document.getElementById('loginUpdateInfo');
+        if (loginLabel) {
+            loginLabel.textContent = `Actualizado hasta: ${ultimaVentaFecha}`;
+        }
 
-        setTimeout(() => {
-            document.getElementById('loadingScreen').style.display = 'none';
-            document.getElementById('appContainer').style.visibility = 'visible';
-            Object.values(charts).forEach(c => c.resize());
-        }, 600);
+        appPreloadedStatus = true;
+
+        // Si el usuario ya metió la contraseña mientras descargaba, lanzamos la app de golpe
+        if (document.getElementById('loginScreen').style.display === 'none' && document.getElementById('appContainer').style.visibility !== 'visible') {
+            lanzarDashboardDirecto();
+        }
 
     } catch (e) {
         document.getElementById('loadingSpinner').style.display = 'none';
         document.getElementById('loadingTitle').textContent = 'Error de conexión. Revise los enlaces del CSV.';
         document.getElementById('loadingTitle').style.color = '#d93025';
+        const loginLabel = document.getElementById('loginUpdateInfo');
+        if (loginLabel) loginLabel.textContent = 'Error al sincronizar datos';
     }
+}
+
+function lanzarDashboardDirecto() {
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('appContainer').style.visibility = 'visible';
+    
+    // Forzar renderizado y cálculo dimensional inicial limpio
+    cambiarModulo('general', document.querySelector('.modulos-list li'));
+    
+    setTimeout(() => {
+        Object.values(charts).forEach(c => c.resize());
+    }, 150);
 }
 
 function cambiarModulo(modulo, elemento) {
@@ -377,22 +424,16 @@ function inyectarMapaNacional(idContenedorPadre, arrayCliData) {
     }
 }
 
-// LÓGICA DIRECTA: LEE TU EXCEL Y OBEDECE A LA COLUMNA "ESTADO DE VENTA"
 function obtenerInactivosReales(idVendedorFiltro) {
     const inactivosList = [];
-
     db.clientes.forEach(c => {
         const vendedorDir = normalizarTexto(c[COLS.clientes.idVendedor]);
         const estadoVenta = normalizarTexto(c[COLS.clientes.estado]); 
-        
         const pertenece = (idVendedorFiltro === 'GLOBAL') ? true : (vendedorDir === idVendedorFiltro);
-        
-        // Si tu base de datos dice "INACTIVO", el dashboard lo marca como inactivo. Directo.
         if (pertenece && estadoVenta.includes('INACTIVO')) {
             inactivosList.push(c);
         }
     });
-
     return inactivosList;
 }
 
@@ -773,7 +814,6 @@ function mostrarModalInactivos(idVendedor, nombreVendedor) {
         const frag = document.createDocumentFragment();
         clientesInactivos.forEach(c => {
             const tr = document.createElement('tr');
-            // Muestra el texto tal cual está en tu base de datos Clientes
             const estadoReal = c[COLS.clientes.estado] || 'INACTIVO';
             tr.innerHTML = `<td>${c[COLS.clientes.documento] || '---'}</td><td>${c[COLS.clientes.razon] || '---'}</td><td><span class="badge badge-inactivo">${estadoReal}</span></td>`;
             frag.appendChild(tr);
@@ -793,3 +833,6 @@ document.addEventListener('click', function(e) {
         list.style.display = 'none';
     }
 });
+
+// DISPARO INMEDIATO DE PRECARGA AL CARGAR LA PÁGINA EN EL NAVEGADOR
+document.addEventListener('DOMContentLoaded', inicializarApp);
