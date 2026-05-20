@@ -22,7 +22,7 @@
     <div id="loadingScreen">
         <div class="spinner" id="loadingSpinner"></div>
         <h2 id="loadingTitle">Sincronizando con Google Sheets...</h2>
-        <p id="loadingDesc">Descargando y procesando ventas en tiempo real</p>
+        <p id="loadingDesc">Procesando inteligencia comercial y ventas en tiempo real</p>
     </div>
 
     <div id="modalInactivos" class="modal-overlay">
@@ -42,9 +42,13 @@
     <div id="appContainer">
         
         <aside class="sidebar">
-            <div class="sidebar-header">Equipo de Ventas</div>
+            <div class="sidebar-header">Menú Dialex</div>
+            <ul class="vendedores-list" id="listaEstrategia">
+                <li class="btn-estrategia" onclick="cargarVistaInteligencia(this)">🚀 INTELIGENCIA COMERCIAL</li>
+            </ul>
+            <div class="sidebar-header" style="font-size: 0.9rem; background: #1557b0;">Equipo de Ventas</div>
             <ul class="vendedores-list" id="listaVendedores">
-                <li class="active" onclick="cargarVistaGlobal(this)">🌐 VISTA GLOBAL</li>
+                <li class="active" onclick="cargarVistaGlobal(this)">🌐 VISTA GENERAL</li>
             </ul>
         </aside>
 
@@ -54,73 +58,106 @@
                 <span id="tipoVendedorTag" class="tag-tipo">COBERTURA</span>
             </h1>
             
-            <div class="kpi-resumen" id="contenedorKPIs"></div>
-
-            <div class="dashboard-grid">
-                
-                <div class="card">
-                    <h3>Avance de la Meta</h3>
-                    <div class="chart-container" style="max-width: 260px;">
-                        <canvas id="chartVelocimetro"></canvas>
-                        <div class="speedometer-text" id="textoVelocimetro">0%</div>
+            <div id="vistaPrincipal">
+                <div class="kpi-resumen" id="contenedorKPIs"></div>
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <h3>Avance de la Meta</h3>
+                        <div class="chart-container" style="max-width: 260px;">
+                            <canvas id="chartVelocimetro"></canvas>
+                            <div class="speedometer-text" id="textoVelocimetro">0%</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 id="tituloGraficoDona">Distribución</h3>
+                        <div class="chart-container" style="max-width: 240px;">
+                            <canvas id="chartDona"></canvas>
+                        </div>
+                    </div>
+                    <div class="card full-width" id="cardGlobalLinea">
+                        <h3>Comportamiento de Ventas x Días</h3>
+                        <div class="chart-container responsive-chart">
+                            <canvas id="chartLinea"></canvas>
+                        </div>
+                    </div>
+                    <div class="card full-width" id="cardGlobalRankingMeta">
+                        <h3>Ranking x % de Meta Cumplida</h3>
+                        <div class="chart-container responsive-chart" style="padding-top: 15px;">
+                            <canvas id="chartRankingMeta"></canvas>
+                        </div>
+                    </div>
+                    <div class="card" id="cardVendedorProdUnid" style="display:none;">
+                        <h3>Ranking Productos x Unidad</h3>
+                        <div class="table-wrapper">
+                            <table id="tablaProdUnid">
+                                <thead><tr><th>Producto</th><th class="num-col">Unidades</th></tr></thead><tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card" id="cardVendedorProdCaja" style="display:none;">
+                        <h3>Ranking Productos x Caja</h3>
+                        <div class="table-wrapper">
+                            <table id="tablaProdCaja">
+                                <thead><tr><th>Producto</th><th class="num-col">Cajas</th></tr></thead><tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card full-width" id="cardVendedorClientes" style="display:none;">
+                        <h3>Ranking de Clientes</h3>
+                        <div class="table-wrapper">
+                            <table id="tablaClientesVend">
+                                <thead><tr><th>Razón Social</th><th class="num-col">Facturado (S/)</th></tr></thead><tbody></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
-
-                <div class="card">
-                    <h3 id="tituloGraficoDona">Distribución</h3>
-                    <div class="chart-container" style="max-width: 240px;">
-                        <canvas id="chartDona"></canvas>
-                    </div>
-                </div>
-
-                <div class="card full-width" id="cardGlobalLinea">
-                    <h3>Comportamiento de Ventas x Días</h3>
-                    <div class="chart-container responsive-chart">
-                        <canvas id="chartLinea"></canvas>
-                    </div>
-                </div>
-
-                <div class="card full-width" id="cardGlobalRankingMeta">
-                    <h3>Ranking x % de Meta Cumplida (Proyección al 100%)</h3>
-                    <div class="chart-container responsive-chart" style="padding-top: 15px;">
-                        <canvas id="chartRankingMeta"></canvas>
-                    </div>
-                </div>
-
-                <div class="card" id="cardVendedorProdUnid" style="display:none;">
-                    <h3>Ranking Productos x Unidad</h3>
-                    <div class="table-wrapper">
-                        <table id="tablaProdUnid">
-                            <thead><tr><th>Producto</th><th class="num-col">Unidades</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="card" id="cardVendedorProdCaja" style="display:none;">
-                    <h3>Ranking Productos x Caja</h3>
-                    <div class="table-wrapper">
-                        <table id="tablaProdCaja">
-                            <thead><tr><th>Producto</th><th class="num-col">Cajas</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="card full-width" id="cardVendedorClientes" style="display:none;">
-                    <h3>Ranking de Clientes del Vendedor</h3>
-                    <div class="table-wrapper">
-                        <table id="tablaClientesVend">
-                            <thead><tr><th>Razón Social</th><th class="num-col">Total Facturado (S/)</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-
             </div>
+
+            <div id="vistaInteligencia" style="display: none;">
+                <div class="kpi-resumen">
+                    <div class="kpi-box destacado"><h4>Ticket Promedio</h4><span id="kpiTicketPromedio">S/ 0.00</span></div>
+                    <div class="kpi-box"><h4>Frecuencia Promedio</h4><span id="kpiFrecuencia">0</span><h4 style="margin-top:5px; text-transform:none;">compras x mes</h4></div>
+                    <div class="kpi-box"><h4>Clientes Riesgo Alto</h4><span id="kpiRiesgo" style="color:#d93025;">0</span></div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="card full-width">
+                        <h3>Segmentación de Rentabilidad (Modelo ABC)</h3>
+                        <p style="font-size:0.85rem; color:#5f6368; text-align:center; margin-top:-10px;">Top Clientes que generan el 80% de tus ingresos (Tipo A)</p>
+                        <div class="table-wrapper" style="max-height: 300px; overflow-y: auto;">
+                            <table id="tablaABC">
+                                <thead><tr><th>Razón Social</th><th>Segmento</th><th class="num-col">Total Comprado</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Clientes en Riesgo (Fuga)</h3>
+                        <p style="font-size:0.8rem; color:#5f6368; text-align:center; margin-top:-10px;">Compraron en Abril pero no en Mayo</p>
+                        <div class="table-wrapper">
+                            <table id="tablaRiesgo">
+                                <thead><tr><th>Cliente</th><th>Estado</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Oportunidades Geográficas</h3>
+                        <p style="font-size:0.8rem; color:#5f6368; text-align:center; margin-top:-10px;">Concentración de ventas por zona</p>
+                        <div class="table-wrapper">
+                            <table id="tablaGeografia">
+                                <thead><tr><th>Ubicación</th><th class="num-col">Volumen Venta</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
-
     <script src="app.js"></script>
 </body>
 </html>
