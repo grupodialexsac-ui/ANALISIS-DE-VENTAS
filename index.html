@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Dashboard Comercial - Dialex</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="styles.css">
@@ -26,12 +26,12 @@
 
     <div id="menuPrincipalScreen" style="display: none;">
         <div class="menu-principal-box">
-            <h1 class="menu-title">MENÚ PRINCIPAL</h1>
+            <h1 class="menu-title">Menú Principal</h1>
             <div class="menu-grid">
-                <button class="menu-btn" onclick="abrirVistaGlobalDesdeMenu()">VISTA GENERAL DE VENTAS</button>
-                <button class="menu-btn" onclick="abrirVistaVendedoresDesdeMenu()">ANÁLISIS DE RENDIMIENTO DE VENDEDORES</button>
-                <button class="menu-btn" onclick="abrirVistaBusquedaDesdeMenu()">BÚSQUEDA CLIENTES</button>
-                <button class="menu-btn" onclick="alert('Módulo de Mapa en desarrollo...')">MAPA DE COBERTURA DE DIALEX</button>
+                <button class="menu-btn" onclick="abrirVistaGlobalDesdeMenu()">Vista General de Ventas</button>
+                <button class="menu-btn" onclick="abrirVistaVendedoresDesdeMenu()">Análisis de Rendimiento de Vendedores</button>
+                <button class="menu-btn" onclick="abrirVistaBusquedaDesdeMenu()">Búsqueda Clientes</button>
+                <button class="menu-btn" onclick="alert('Módulo de Cobertura Geográfica en proceso de desarrollo.')">Mapa de Cobertura de Dialex</button>
             </div>
         </div>
     </div>
@@ -40,7 +40,7 @@
         <div class="modal-content">
             <span class="modal-close" onclick="cerrarModalInactivos()">&times;</span>
             <h3 style="color:#ea4335; margin-top:0;">Lista de Clientes Inactivos</h3>
-            <p style="font-size: 0.9rem; color:#5f6368;">Se requiere plan de recuperación para estos contactos.</p>
+            <p style="font-size: 0.9rem; color:#5f6368; margin-bottom: 15px;">Contactos asignados sin transacciones registradas en el periodo actual.</p>
             <div class="table-wrapper">
                 <table id="tablaInactivos">
                     <thead><tr><th>DNI / RUC</th><th>Razón Social</th></tr></thead>
@@ -53,9 +53,9 @@
     <div id="appContainer" style="display: none;">
         
         <aside class="sidebar">
-            <div class="sidebar-header" style="background-color: #0f52ba;">OPCIONES</div>
+            <div class="sidebar-header" style="background-color: #0f52ba;">Navegación</div>
             <ul class="vendedores-list" style="flex: none; border-bottom: 2px solid #e8eaed;">
-                <li style="background: #e8f0fe; color: #1a73e8; border-left: 4px solid #1a73e8; margin-bottom: 10px;" onclick="mostrarMenuPrincipal()">🏠 VOLVER AL MENÚ</li>
+                <li class="btn-home-menu" onclick="mostrarMenuPrincipal()">🏠 VOLVER AL MENÚ</li>
                 <li id="tabGlobal" class="active" onclick="abrirVistaGlobal()">📊 VISTA GENERAL</li>
                 <li id="tabBusqueda" onclick="abrirVistaBusqueda()">🔍 BÚSQUEDA CLIENTES</li>
             </ul>
@@ -76,39 +76,45 @@
                 <div class="kpi-resumen" id="contenedorKPIs"></div>
 
                 <div class="dashboard-grid">
-                    <div class="card">
+                    <div class="card card-circular">
                         <h3>Avance de la Meta</h3>
-                        <div class="chart-container" style="max-width: 260px;">
+                        <div class="chart-container container-circular">
                             <canvas id="chartVelocimetro"></canvas>
                             <div class="speedometer-text" id="textoVelocimetro">0%</div>
                         </div>
                     </div>
-                    <div class="card">
+                    
+                    <div class="card card-circular">
                         <h3 id="tituloGraficoDona">Distribución</h3>
-                        <div class="chart-container" style="max-width: 240px;">
+                        <div class="chart-container container-circular">
                             <canvas id="chartDona"></canvas>
                         </div>
                     </div>
-                    <div class="card full-width" id="cardGlobalLinea">
+                    
+                    <div class="card full-width">
                         <h3>Comportamiento de Ventas x Días</h3>
                         <div class="chart-container responsive-chart">
                             <canvas id="chartLinea"></canvas>
                         </div>
                     </div>
-                    <div class="card full-width" id="cardGlobalRankingMeta">
+                    
+                    <div class="card full-width">
                         <h3>Ranking x % de Meta Cumplida (Proyección al 100%)</h3>
-                        <div class="chart-container responsive-chart" style="padding-top: 15px;">
+                        <div class="chart-container responsive-chart-bar">
                             <canvas id="chartRankingMeta"></canvas>
                         </div>
                     </div>
+                    
                     <div class="card" id="cardVendedorProdUnid" style="display:none;">
                         <h3>Ranking Productos x Unidad</h3>
                         <div class="table-wrapper"><table id="tablaProdUnid"><thead><tr><th>Producto</th><th class="num-col">Unidades</th></tr></thead><tbody></tbody></table></div>
                     </div>
+                    
                     <div class="card" id="cardVendedorProdCaja" style="display:none;">
                         <h3>Ranking Productos x Caja</h3>
                         <div class="table-wrapper"><table id="tablaProdCaja"><thead><tr><th>Producto</th><th class="num-col">Cajas</th></tr></thead><tbody></tbody></table></div>
                     </div>
+                    
                     <div class="card full-width" id="cardVendedorClientes" style="display:none;">
                         <h3>Ranking de Clientes del Vendedor</h3>
                         <div class="table-wrapper"><table id="tablaClientesVend"><thead><tr><th>Razón Social</th><th class="num-col">Total Facturado (S/)</th></tr></thead><tbody></tbody></table></div>
