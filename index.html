@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
     <div id="loginScreen">
         <div class="login-box">
             <h2>Acceso Privado Dialex</h2>
@@ -31,7 +30,12 @@
             <p style="font-size: 0.9rem; color:#5f6368;">Se requiere plan de recuperación para estos contactos.</p>
             <div class="table-wrapper">
                 <table id="tablaInactivos">
-                    <thead><tr><th>DNI / RUC</th><th>Razón Social</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th>DNI / RUC</th>
+                            <th>Razón Social</th>
+                        </tr>
+                    </thead>
                     <tbody></tbody>
                 </table>
             </div>
@@ -39,110 +43,141 @@
     </div>
 
     <div id="appContainer">
-        
-        <aside class="sidebar" id="sidebarMenu">
-            <div class="sidebar-header" style="background-color: #0f52ba; display: flex; justify-content: space-between; align-items: center; padding: 15px 20px;">
-                <span>MENÚ PRINCIPAL</span>
-                <button id="btnHamburguesa" style="display: none; background: none; border: none; color: white; font-size: 1.4rem; cursor: pointer; padding: 0; line-height: 1;">☰</button>
-            </div>
-            
-            <div id="contenedorSelectMovil" style="display: none; padding: 10px 15px; background-color: #f8f9fa; border-bottom: 1px solid #e8eaed;">
-                <select id="selectVendedoresMovil" style="width: 100%; padding: 10px; border-radius: 6px; background: #1a73e8; color: white; border: 1px solid #1557b0; font-size: 0.9rem; font-weight: bold;">
-                    <option value="" disabled selected>📱 Seleccionar Vendedor...</option>
-                </select>
+        <aside class="sidebar">
+            <div class="sidebar-header">MENÚ PRINCIPAL</div>
+
+            <div class="menu-section">
+                <button id="tabGlobal" class="nav-item active" onclick="abrirVistaGlobal()">📊 Vista general</button>
+                <button id="tabBusqueda" class="nav-item" onclick="abrirVistaBusqueda()">🔍 Búsqueda clientes</button>
             </div>
 
-            <ul class="vendedores-list nav-tabs" style="flex: none; border-bottom: 2px solid #e8eaed;">
-                <li id="tabGlobal" class="active" onclick="abrirVistaGlobal()">📊 VISTA GENERAL</li>
-                <li id="tabBusqueda" onclick="abrirVistaBusqueda()">🔍 BÚSQUEDA CLIENTES</li>
-            </ul>
-            
-            <div class="sidebar-header" id="headerEquipoVentas">Equipo de Ventas</div>
-            <ul class="vendedores-list" id="listaVendedores">
-            </ul>
+            <div class="sidebar-header">Equipo de ventas</div>
+            <div class="seller-panel">
+                <label for="searchVendedor">Seleccionar vendedor</label>
+                <div class="seller-search-row">
+                    <input type="search" id="searchVendedor" list="listaVendedoresDatalist" placeholder="Escribe un nombre..." onkeypress="evaluarEnterVendedor(event)">
+                    <button class="small-btn" onclick="buscarVendedorDesdeSidebar()">Ver</button>
+                </div>
+                <datalist id="listaVendedoresDatalist"></datalist>
+                <p class="helper-text">Busca un vendedor por nombre o apellido y carga su análisis sin mostrar toda la lista.</p>
+            </div>
+
+            <div class="sidebar-footer">
+                <span id="contadorVendedores">0 vendedores activos</span>
+            </div>
         </aside>
 
         <main class="main-content">
-            
             <div id="vistaDashboard">
                 <h1 class="header-title">
-                    <span id="tituloDashboard">Vista General - Mayo 2026</span>
+                    <span id="tituloDashboard">Vista General</span>
                     <span id="tipoVendedorTag" class="tag-tipo">COBERTURA</span>
                 </h1>
-                
+
                 <div class="kpi-resumen" id="contenedorKPIs"></div>
 
                 <div class="dashboard-grid">
                     <div class="card">
-                        <h3>Avance de la Meta</h3>
-                        <div class="chart-container" style="max-width: 260px;">
+                        <h3>Avance de la meta</h3>
+                        <div class="chart-container" style="max-width: 280px; margin: 0 auto;">
                             <canvas id="chartVelocimetro"></canvas>
                             <div class="speedometer-text" id="textoVelocimetro">0%</div>
                         </div>
                     </div>
+
                     <div class="card">
                         <h3 id="tituloGraficoDona">Distribución</h3>
-                        <div class="chart-container" style="max-width: 240px;">
+                        <div class="chart-container" style="max-width: 260px; margin: 0 auto;">
                             <canvas id="chartDona"></canvas>
                         </div>
                     </div>
+
                     <div class="card full-width" id="cardGlobalLinea">
-                        <h3>Comportamiento de Ventas x Días</h3>
+                        <h3>Comportamiento de ventas x días</h3>
                         <div class="chart-container responsive-chart">
                             <canvas id="chartLinea"></canvas>
                         </div>
                     </div>
+
                     <div class="card full-width" id="cardGlobalRankingMeta">
-                        <h3>Ranking x % de Meta Cumplida (Proyección al 100%)</h3>
-                        <div class="chart-container responsive-chart" style="padding-top: 15px;">
+                        <h3>Ranking x % de meta cumplida (proyección al 100%)</h3>
+                        <div class="chart-container responsive-chart" style="padding-top: 8px;">
                             <canvas id="chartRankingMeta"></canvas>
                         </div>
                     </div>
+
                     <div class="card" id="cardVendedorProdUnid" style="display:none;">
-                        <h3>Ranking Productos x Unidad</h3>
-                        <div class="table-wrapper"><table id="tablaProdUnid"><thead><tr><th>Producto</th><th class="num-col">Unidades</th></tr></thead><tbody></tbody></table></div>
+                        <h3>Ranking productos x unidad</h3>
+                        <div class="table-wrapper">
+                            <table id="tablaProdUnid">
+                                <thead><tr><th>Producto</th><th class="num-col">Unidades</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
                     </div>
+
                     <div class="card" id="cardVendedorProdCaja" style="display:none;">
-                        <h3>Ranking Productos x Caja</h3>
-                        <div class="table-wrapper"><table id="tablaProdCaja"><thead><tr><th>Producto</th><th class="num-col">Cajas</th></tr></thead><tbody></tbody></table></div>
+                        <h3>Ranking productos x caja</h3>
+                        <div class="table-wrapper">
+                            <table id="tablaProdCaja">
+                                <thead><tr><th>Producto</th><th class="num-col">Cajas</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
                     </div>
+
                     <div class="card full-width" id="cardVendedorClientes" style="display:none;">
-                        <h3>Ranking de Clientes del Vendedor</h3>
-                        <div class="table-wrapper"><table id="tablaClientesVend"><thead><tr><th>Razón Social</th><th class="num-col">Total Facturado (S/)</th></tr></thead><tbody></tbody></table></div>
+                        <h3>Ranking de clientes del vendedor</h3>
+                        <div class="table-wrapper">
+                            <table id="tablaClientesVend">
+                                <thead><tr><th>Razón Social</th><th class="num-col">Total facturado (S/)</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div id="vistaBusqueda" style="display: none;">
-                <h1 class="header-title">Inteligencia de Clientes</h1>
-                
+                <h1 class="header-title">Inteligencia de clientes</h1>
+
                 <div class="search-container">
-                    <input type="text" id="inputBusquedaCliente" class="search-input" list="listaNombresClientes" placeholder="Escribe o selecciona la Razón Social del cliente..." onkeypress="evaluarEnterBusqueda(event)">
+                    <input type="text" id="inputBusquedaCliente" class="search-input" list="listaNombresClientes" placeholder="Escribe o selecciona la razón social del cliente..." onkeypress="evaluarEnterBusqueda(event)">
                     <datalist id="listaNombresClientes"></datalist>
-                    <button class="search-btn" onclick="ejecutarBusquedaCliente()">🔍 Analizar Cliente</button>
+                    <button class="search-btn" onclick="ejecutarBusquedaCliente()">🔍 Analizar cliente</button>
                 </div>
 
-                <div class="kpi-resumen" id="kpiBusqueda">
-                    </div>
+                <div class="kpi-resumen" id="kpiBusqueda"></div>
 
                 <div class="dashboard-grid" id="gridResultadosCliente" style="display:none;">
                     <div class="card full-width">
-                        <h3>Comportamiento de Compra en el Tiempo</h3>
+                        <h3>Comportamiento de compra en el tiempo</h3>
                         <div class="chart-container responsive-chart">
                             <canvas id="chartLineaCliente"></canvas>
                         </div>
                     </div>
+
                     <div class="card">
-                        <h3>Historial Productos x Caja</h3>
-                        <div class="table-wrapper"><table id="tablaBusquedaCaja"><thead><tr><th>Producto</th><th class="num-col">Cajas Compradas</th></tr></thead><tbody></tbody></table></div>
+                        <h3>Historial productos x caja</h3>
+                        <div class="table-wrapper">
+                            <table id="tablaBusquedaCaja">
+                                <thead><tr><th>Producto</th><th class="num-col">Cajas compradas</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
                     </div>
+
                     <div class="card">
-                        <h3>Historial Productos x Unidad</h3>
-                        <div class="table-wrapper"><table id="tablaBusquedaUnid"><thead><tr><th>Producto</th><th class="num-col">Unid. Compradas</th></tr></thead><tbody></tbody></table></div>
+                        <h3>Historial productos x unidad</h3>
+                        <div class="table-wrapper">
+                            <table id="tablaBusquedaUnid">
+                                <thead><tr><th>Producto</th><th class="num-col">Unid. compradas</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
-
         </main>
     </div>
 
