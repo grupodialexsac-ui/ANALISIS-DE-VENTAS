@@ -11,96 +11,56 @@ body {
 
 /* --- PANTALLA DE ACCESO (LOGIN) --- */
 #loginScreen { 
-    position: fixed; 
-    top: 0; 
-    left: 0; 
-    width: 100vw; 
-    height: 100vh; 
-    background-color: #1a73e8; 
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    z-index: 9999; 
-    transition: opacity 0.3s; 
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+    background-color: #1a73e8; display: flex; justify-content: center; align-items: center; 
+    z-index: 9999; transition: opacity 0.3s; 
 }
 .login-box { 
-    background: white; 
-    padding: 40px; 
-    border-radius: 12px; 
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2); 
-    text-align: center; 
-    width: 320px; 
+    background: white; padding: 40px; border-radius: 12px; 
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2); text-align: center; width: 320px; 
 }
-.login-box h2 { 
-    margin-top: 0; 
-    color: #1a73e8; 
-    font-size: 1.6rem; 
-    margin-bottom: 20px; 
-}
-.login-box input { 
-    width: 100%; 
-    padding: 12px; 
-    margin-bottom: 15px; 
-    border: 1px solid #dadce0; 
-    border-radius: 6px; 
-    font-size: 1rem; 
-    box-sizing: border-box; 
-}
-.login-box button { 
-    width: 100%; 
-    padding: 12px; 
-    background-color: #1a73e8; 
-    color: white; 
-    border: none; 
-    border-radius: 6px; 
-    font-size: 1rem; 
-    font-weight: bold; 
-    cursor: pointer; 
-    transition: background 0.2s; 
-}
+.login-box h2 { margin-top: 0; color: #1a73e8; font-size: 1.6rem; margin-bottom: 20px; }
+.login-box input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #dadce0; border-radius: 6px; font-size: 1rem; box-sizing: border-box; }
+.login-box button { width: 100%; padding: 12px; background-color: #1a73e8; color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
 .login-box button:hover { background-color: #1557b0; }
 .error-msg { color: #d93025; font-size: 0.9rem; margin-top: 10px; display: none; }
 
-#appContainer { display: flex; height: 100vh; width: 100vw; visibility: hidden; }
+/* --- MENÚ PRINCIPAL (NUEVO) --- */
+#menuPrincipalScreen {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background-color: #f1f3f4; display: flex; justify-content: center; align-items: center;
+    z-index: 5000;
+}
+.menu-principal-box {
+    background: white; padding: 50px; border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 90%; max-width: 800px;
+}
+.menu-title {
+    color: #1a73e8; text-align: center; font-size: 2.2rem; margin-top: 0; margin-bottom: 35px; text-transform: uppercase;
+}
+.menu-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;
+}
+.menu-btn {
+    background-color: #1a73e8; color: white; padding: 25px 20px; border: none; border-radius: 12px;
+    font-size: 1.2rem; font-weight: bold; cursor: pointer; transition: transform 0.2s, background-color 0.2s;
+    box-shadow: 0 4px 10px rgba(26,115,232,0.3); text-transform: uppercase; line-height: 1.4;
+}
+.menu-btn:hover { background-color: #1557b0; transform: translateY(-4px); box-shadow: 0 6px 15px rgba(26,115,232,0.4); }
+
+/* --- CONTENEDOR DE LA APP --- */
+#appContainer { display: none; height: 100vh; width: 100vw; }
 
 /* --- BARRA LATERAL (ESCRITORIO) --- */
-.sidebar { 
-    width: 260px; 
-    background-color: #fff; 
-    box-shadow: 2px 0 5px rgba(0,0,0,0.05); 
-    display: flex; 
-    flex-direction: column; 
-    z-index: 10; 
-}
-.sidebar-header { 
-    padding: 20px; 
-    background-color: #1a73e8; 
-    color: white; 
-    font-weight: bold; 
-    font-size: 1.2rem; 
-    text-align: center; 
-}
+.sidebar { width: 260px; background-color: #fff; box-shadow: 2px 0 5px rgba(0,0,0,0.05); display: flex; flex-direction: column; z-index: 10; }
+.sidebar-header { padding: 20px; background-color: #1a73e8; color: white; font-weight: bold; font-size: 1.2rem; text-align: center; }
 .vendedores-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
-.vendedores-list li { 
-    padding: 12px 20px; 
-    border-bottom: 1px solid #eee; 
-    cursor: pointer; 
-    font-size: 0.9rem; 
-    transition: background 0.2s; 
-}
-.vendedores-list li:hover, .vendedores-list li.active { 
-    background-color: #e8f0fe; 
-    color: #1a73e8; 
-    font-weight: bold; 
-    border-left: 4px solid #1a73e8; 
-}
+.vendedores-list li { padding: 12px 20px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 0.9rem; transition: background 0.2s; }
+.vendedores-list li:hover, .vendedores-list li.active { background-color: #e8f0fe; color: #1a73e8; font-weight: bold; border-left: 4px solid #1a73e8; }
 
 /* --- PANEL DE CONTENIDO PRINCIPAL --- */
 .main-content { flex: 1; padding: 20px 30px; overflow-y: auto; }
-.header-title { 
-    margin-top: 0; color: #202124; font-size: 1.8rem; border-bottom: 2px solid #e8eaed; 
-    padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;
-}
+.header-title { margin-top: 0; color: #202124; font-size: 1.8rem; border-bottom: 2px solid #e8eaed; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;}
 .tag-tipo { font-size: 1rem; background: #e8f0fe; color: #1a73e8; padding: 6px 15px; border-radius: 20px; font-weight: bold; display: none;}
 
 /* --- BLOQUES DE INDICADORES (KPI) --- */
@@ -137,23 +97,11 @@ tr:hover { background-color: #f8f9fa; }
 }
 #loadingScreen h2 { color: #1a73e8; margin-top: 25px; margin-bottom: 5px;}
 #loadingScreen p { color: #5f6368; font-size: 1rem; }
-.spinner {
-    border: 6px solid #f1f3f4; border-top: 6px solid #1a73e8;
-    border-radius: 50%; width: 60px; height: 60px;
-    animation: spin 1s linear infinite;
-}
+.spinner { border: 6px solid #f1f3f4; border-top: 6px solid #1a73e8; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-.modal-overlay {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(0,0,0,0.6); z-index: 9000;
-    display: none; justify-content: center; align-items: center;
-}
-.modal-content {
-    background: white; padding: 25px; border-radius: 12px;
-    width: 90%; max-width: 600px; max-height: 85vh; 
-    overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-}
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9000; display: none; justify-content: center; align-items: center; }
+.modal-content { background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 600px; max-height: 85vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
 .modal-close { float: right; cursor: pointer; font-size: 1.8rem; font-weight: bold; color: #5f6368; line-height: 1; }
 .modal-close:hover { color: #d93025; }
 
@@ -173,9 +121,15 @@ tr:hover { background-color: #f8f9fa; }
    DISEÑO ADAPTATIVO (DISPOSITIVOS MÓVILES Y CELULARES) - SCROLL CORREGIDO
    ========================================================================== */
 @media (max-width: 768px) {
+    /* MENÚ PRINCIPAL MÓVIL */
+    .menu-grid { grid-template-columns: 1fr; }
+    .menu-principal-box { padding: 20px; }
+    .menu-title { font-size: 1.6rem; margin-bottom: 25px; }
+    .menu-btn { padding: 20px 15px; font-size: 1rem; }
+
     /* LIBERAR EL SCROLL VERTICAL PARA TODA LA PÁGINA */
     html, body { height: auto !important; overflow-y: auto !important; overflow-x: hidden !important; display: block !important; }
-    #appContainer { display: block !important; height: auto !important; width: 100% !important; overflow: visible !important; }
+    #appContainer { display: none; height: auto !important; width: 100% !important; overflow: visible !important; }
 
     /* BARRA LATERAL (MENÚS SUPERIORES) */
     .sidebar { width: 100%; height: auto; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 10; }
