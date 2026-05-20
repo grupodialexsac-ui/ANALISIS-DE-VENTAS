@@ -70,14 +70,14 @@ async function inicializarApp() {
         db.clientes = parseCSV(await resCli.text());
         
         poblarSidebar();
+        cargarVistaGlobal(document.getElementById('tabGlobal'));
         prepararBuscador();
         
         document.getElementById('loadingScreen').style.display = 'none';
-        mostrarMenuPrincipal();
-        
+        document.getElementById('appContainer').style.visibility = 'visible';
     } catch (error) { 
         console.error(error); 
-        alert("Error cargando el repositorio de datos de Google Sheets."); 
+        alert("Error descargando datos. Revisa la conexión."); 
     }
 }
 
@@ -103,8 +103,10 @@ function poblarSidebar() {
 function prepararBuscador() {
     let colRazon = getCol(db.ventas[0], 'RAZÓN') || getCol(db.ventas[0], 'RAZON');
     if (!colRazon) return;
+    
     let clientesUnicos = [...new Set(db.ventas.map(v => v[colRazon]).filter(Boolean))].sort();
     const datalist = document.getElementById('listaNombresClientes');
+    
     clientesUnicos.forEach(cliente => {
         let opt = document.createElement('option');
         opt.value = cliente;
@@ -112,43 +114,28 @@ function prepararBuscador() {
     });
 }
 
-// --- DIRECCIONAMIENTO DEL MENU PRINCIPAL ---
-function mostrarMenuPrincipal() {
-    document.getElementById('appContainer').style.display = 'none';
-    document.getElementById('menuPrincipalScreen').style.display = 'flex';
-}
-function entrarAApp() {
-    document.getElementById('menuPrincipalScreen').style.display = 'none';
-    document.getElementById('appContainer').style.display = 'flex';
-}
-function abrirVistaGlobalDesdeMenu() { entrarAApp(); abrirVistaGlobal(); }
-function abrirVistaBusquedaDesdeMenu() { entrarAApp(); abrirVistaBusqueda(); }
-function abrirVistaVendedoresDesdeMenu() {
-    entrarAApp();
-    let primerVendedor = document.querySelectorAll('#listaVendedores li')[0];
-    if(primerVendedor) primerVendedor.click();
-    else abrirVistaGlobal();
-}
-
-// --- NAVEGACIÓN DE SECCIONES ---
+// --- NAVEGACIÓN DE PESTAÑAS ---
 function abrirVistaGlobal() {
     document.getElementById('vistaDashboard').style.display = 'block';
     document.getElementById('vistaBusqueda').style.display = 'none';
     cargarVistaGlobal(document.getElementById('tabGlobal'));
 }
+
 function abrirVistaBusqueda() {
     document.getElementById('vistaDashboard').style.display = 'none';
     document.getElementById('vistaBusqueda').style.display = 'block';
+    
     restablecerMenu(null);
     document.getElementById('tabBusqueda').classList.add('active');
     document.getElementById('tabGlobal').classList.remove('active');
 }
+
 function restablecerMenu(li) { 
     document.querySelectorAll('.vendedores-list li').forEach(el => el.classList.remove('active')); 
     if(li) li.classList.add('active'); 
 }
 
-// --- LOGICA: CONSOLIDADO GLOBAL ---
+// --- VISTA 1: GLOBAL ---
 function cargarVistaGlobal(liElement) {
     if(liElement) {
         restablecerMenu(liElement);
@@ -157,11 +144,11 @@ function cargarVistaGlobal(liElement) {
     
     document.getElementById('tituloDashboard').textContent = "Vista General - Mayo 2026";
     document.getElementById('tipoVendedorTag').style.display = 'none';
+    document.getElementById('cardGlobalLinea').style.display = 'flex';
+    document.getElementById('cardGlobalRankingMeta').style.display = 'flex';
     document.getElementById('cardVendedorProdUnid').style.display = 'none';
     document.getElementById('cardVendedorProdCaja').style.display = 'none';
     document.getElementById('cardVendedorClientes').style.display = 'none';
-    document.getElementById('cardGlobalLinea').style.display = 'flex';
-    document.getElementById('cardGlobalRankingMeta').style.display = 'flex';
     document.getElementById('tituloGraficoDona').textContent = "Porcentaje de Venta x Canales";
 
     let vColMeta = getCol(db.vendedores[0], 'META');
@@ -176,12 +163,7 @@ function cargarVistaGlobal(liElement) {
     let totalClientes = new Set(db.clientes.map(c => c[colIdCli])).size;
     let nuevosMayo = db.clientes.filter(c => c[colFechaCli] && c[colFechaCli].includes('05/2026')).length;
 
-    document.getElementById('contenedorKPIs').innerHTML = `
-        <div class="kpi-box destacado"><h4>Venta Total</h4><span>${formatearMoneda(ventaTotal)}</span></div>
-        <div class="kpi-box"><h4>Meta General</h4><span>${formatearMoneda(metaTotal)}</span></div>
-        <div class="kpi-box"><h4>Total Clientes</h4><span>${totalClientes}</span></div>
-        <div class="kpi-box"><h4>Nuevos Mayo</h4><span>${nuevosMayo}</span></div>
-    `;
+    document.getElementById('contenedorKPIs').innerHTML = `<div class="kpi-box destacado"><h4>Venta Total</h4><span>${formatearMoneda(ventaTotal)}</span></div><div class="kpi-box"><h4>Meta General</h4><span>${formatearMoneda(metaTotal)}</span></div><div class="kpi-box"><h4>Total Clientes</h4><span>${totalClientes}</span></div><div class="kpi-box"><h4>Nuevos Mayo</h4><span>${nuevosMayo}</span></div>`;
     
     dibujarVelocimetro(porcentajeGlobal);
     
@@ -194,9 +176,7 @@ function cargarVistaGlobal(liElement) {
         let vend = db.vendedores.find(v => v[vColIdVend] === venta[ventColIdVend]);
         let tipo = vend && vend[vColTipo] ? vend[vColTipo].toUpperCase() : 'OTROS';
         let valor = parseNum(venta[ventColPrecio]);
-        if (tipo.includes('CALL CENTER')) canales['CALL CENTER'] += valor; 
-        else if (tipo.includes('COBERTURA')) canales['COBERTURA'] += valor; 
-        else canales['OTROS'] += valor;
+        if (tipo.includes('CALL CENTER')) canales['CALL CENTER'] += valor; else if (tipo.includes('COBERTURA')) canales['COBERTURA'] += valor; else canales['OTROS'] += valor;
     });
     dibujarDona(['Call Center', 'Cobertura', 'Otros'], [canales['CALL CENTER'], canales['COBERTURA'], canales['OTROS']], ['#4285f4', '#ea4335', '#fbbc05']);
 
@@ -218,15 +198,16 @@ function cargarVistaGlobal(liElement) {
     const pluginPorcentajes = {
         id: 'pluginPorcentajes',
         afterDatasetsDraw(chart) {
-            if (chart.width < 500) return; 
-            const { ctx } = chart; ctx.save();
-            ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = 'bold 11px Arial'; ctx.fillStyle = '#202124';
+            if (chart.width < 600) return; 
+            const { ctx } = chart;
+            ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = 'bold 11px Arial'; ctx.fillStyle = '#202124';
             const meta = chart.getDatasetMeta(0);
             meta.data.forEach((bar, index) => {
                 const pctExacto = rankingMetaArr[index].pct;
                 const yPos = chart.scales.y.getPixelForValue(100) - 6;
                 ctx.fillText(pctExacto.toFixed(1) + '%', bar.x, yPos);
-            }); ctx.restore();
+            });
+            ctx.restore();
         }
     };
 
@@ -239,7 +220,7 @@ function cargarVistaGlobal(liElement) {
     });
 }
 
-// --- LOGICA: FILTRADO VENDEDOR ---
+// --- VISTA 2: VENDEDORES ---
 function cargarVistaVendedor(vendedorData, liElement) {
     restablecerMenu(liElement);
     document.getElementById('tabBusqueda').classList.remove('active');
@@ -267,12 +248,7 @@ function cargarVistaVendedor(vendedorData, liElement) {
     let clientesActivos = susClientesAsignados.filter(c => c[cliColEstado] && c[cliColEstado].includes('ACTIVO')).length;
     clientesInactivosActual = susClientesAsignados.filter(c => c[cliColEstado] && c[cliColEstado].includes('INACTIVO'));
 
-    document.getElementById('contenedorKPIs').innerHTML = `
-        <div class="kpi-box destacado"><h4>Venta Acumulada</h4><span>${formatearMoneda(suVentaTotal)}</span></div>
-        <div class="kpi-box"><h4>Meta Asignada</h4><span>${formatearMoneda(metaVendedor)}</span></div>
-        <div class="kpi-box"><h4>Clientes Totales</h4><span>${susClientesAsignados.length}</span></div>
-        <div class="kpi-box kpi-clickable" onclick="mostrarModalInactivos()" title="Clic para auditar cartera inactiva"><h4>Inactivos (Ver Lista) 🔍</h4><span>${clientesInactivosActual.length}</span></div>
-    `;
+    document.getElementById('contenedorKPIs').innerHTML = `<div class="kpi-box destacado"><h4>Venta Acumulada</h4><span>${formatearMoneda(suVentaTotal)}</span></div><div class="kpi-box"><h4>Meta Asignada</h4><span>${formatearMoneda(metaVendedor)}</span></div><div class="kpi-box"><h4>Clientes Totales</h4><span>${susClientesAsignados.length}</span></div><div class="kpi-box kpi-clickable" onclick="mostrarModalInactivos()" title="Clic para ver inactivos"><h4>Inactivos (Ver Lista) 🔍</h4><span>${clientesInactivosActual.length}</span></div>`;
     
     dibujarVelocimetro(porcentajeVendedor);
     dibujarDona(['Cliente Activo', 'Inactivo'], [clientesActivos, clientesInactivosActual.length], ['#4285f4', '#ea4335']);
@@ -292,7 +268,7 @@ function cargarVistaVendedor(vendedorData, liElement) {
     poblarTablaHTML('tablaClientesVend', countsClientes, true);
 }
 
-// --- LOGICA: INTELIGENCIA CLIENTE ---
+// --- VISTA 3: BUSCADOR DE CLIENTES ---
 function ejecutarBusquedaCliente() {
     let inputStr = document.getElementById('inputBusquedaCliente').value.trim().toUpperCase();
     if (!inputStr) { alert("Escribe el nombre de un cliente."); return; }
@@ -302,32 +278,48 @@ function ejecutarBusquedaCliente() {
     let ventColFecha = getCol(db.ventas[0], 'FECHA');
 
     let comprasCliente = db.ventas.filter(v => v[ventColRazon] && v[ventColRazon].toUpperCase().includes(inputStr));
-    if (comprasCliente.length === 0) { alert("No se encontraron registros de compra para este cliente."); return; }
+    
+    if (comprasCliente.length === 0) {
+        alert("No se encontraron registros de compra para este cliente en el mes.");
+        return;
+    }
 
     let compraTotal = comprasCliente.reduce((sum, v) => sum + parseNum(v[ventColPrecio]), 0);
-    document.getElementById('kpiBusqueda').innerHTML = `<div class="kpi-box destacado" style="margin: 0 auto; max-width: 320px;"><h4>Total Comprado (Mayo)</h4><span>${formatearMoneda(compraTotal)}</span></div>`;
+    
+    document.getElementById('kpiBusqueda').innerHTML = `
+        <div class="kpi-box destacado" style="margin: 0 auto; max-width: 300px;">
+            <h4>Total Comprado (Mayo)</h4>
+            <span>${formatearMoneda(compraTotal)}</span>
+        </div>
+    `;
 
     let daily = {};
     comprasCliente.forEach(v => { let fec = v[ventColFecha]; if(fec) daily[fec] = (daily[fec] || 0) + parseNum(v[ventColPrecio]); });
     dibujarLinea(daily, 'chartLineaCliente', 'Compras Diarias del Cliente (S/)', graficos, 'lineaCliente');
 
     let pColRazon = getCol(db.productos[0], 'RAZÓN') || getCol(db.productos[0], 'RAZON');
-    let pColNombre = getCol(db.productos[0], 'NOMBRE'); let pColCaja = getCol(db.productos[0], 'CAJA'); let pColUnid = getCol(db.productos[0], 'UNID');
+    let pColNombre = getCol(db.productos[0], 'NOMBRE');
+    let pColCaja = getCol(db.productos[0], 'CAJA');
+    let pColUnid = getCol(db.productos[0], 'UNID');
 
     let prodCliente = db.productos.filter(p => p[pColRazon] && p[pColRazon].toUpperCase().includes(inputStr));
     let countsUnid = {}; let countsCaja = {};
 
     prodCliente.forEach(p => { 
         let nombre = p[pColNombre]; let cantUnid = parseNum(p[pColUnid]); let cantCaja = parseNum(p[pColCaja]);
-        if(nombre) { if(cantUnid > 0) countsUnid[nombre] = (countsUnid[nombre] || 0) + cantUnid; if(cantCaja > 0) countsCaja[nombre] = (countsCaja[nombre] || 0) + cantCaja; }
+        if(nombre) { 
+            if(cantUnid > 0) countsUnid[nombre] = (countsUnid[nombre] || 0) + cantUnid; 
+            if(cantCaja > 0) countsCaja[nombre] = (countsCaja[nombre] || 0) + cantCaja; 
+        }
     });
 
     poblarTablaHTML('tablaBusquedaCaja', countsCaja, false);
     poblarTablaHTML('tablaBusquedaUnid', countsUnid, false);
+
     document.getElementById('gridResultadosCliente').style.display = 'grid';
 }
 
-// --- COMPONENTES AUXILIARES ---
+// --- UTILIDADES GRÁFICAS ---
 function dibujarLinea(dailyData, canvasId, labelText, containerObj, keyObj) {
     let fechasOrdenadas = Object.keys(dailyData).sort((a,b) => { let [d1,m1,y1] = a.split('/'); let [d2,m2,y2] = b.split('/'); return new Date(y1, m1-1, d1) - new Date(y2, m2-1, d2); });
     if(containerObj[keyObj]) containerObj[keyObj].destroy();
@@ -337,6 +329,7 @@ function dibujarLinea(dailyData, canvasId, labelText, containerObj, keyObj) {
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
     });
 }
+
 function dibujarVelocimetro(porcentaje) {
     const ctx = document.getElementById('chartVelocimetro').getContext('2d');
     document.getElementById('textoVelocimetro').textContent = porcentaje.toFixed(2) + '%';
@@ -344,26 +337,30 @@ function dibujarVelocimetro(porcentaje) {
     if(graficos.velocimetro) graficos.velocimetro.destroy();
     graficos.velocimetro = new Chart(ctx, { type: 'doughnut', data: { labels: ['Logrado', 'Faltante'], datasets: [{ data: [porcentaje, restante], backgroundColor: ['#34a853', '#ea4335'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: true, aspectRatio: 2, rotation: -90, circumference: 180, cutout: '75%', plugins: { legend: { display: false } } } });
 }
+
 function dibujarDona(labels, data, colores) {
     const ctx = document.getElementById('chartDona').getContext('2d');
     if(graficos.dona) graficos.dona.destroy();
     graficos.dona = new Chart(ctx, { type: 'pie', data: { labels: labels, datasets: [{ data: data, backgroundColor: colores }] }, options: { responsive: true, maintainAspectRatio: true, aspectRatio: 1, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } } });
 }
+
 function mostrarModalInactivos() {
-    if(!clientesInactivosActual || clientesInactivosActual.length === 0) { alert("El vendedor seleccionado no posee clientes inactivos."); return; }
+    if(!clientesInactivosActual || clientesInactivosActual.length === 0) { alert("Sin inactivos."); return; }
     const tbody = document.querySelector('#tablaInactivos tbody'); tbody.innerHTML = '';
     let colDoc = getCol(clientesInactivosActual[0], 'DOCUMENTO') || getCol(clientesInactivosActual[0], 'NUMERO') || getCol(clientesInactivosActual[0], 'RUC') || getCol(clientesInactivosActual[0], 'DNI');
     let colRazon = getCol(clientesInactivosActual[0], 'RAZÓN') || getCol(clientesInactivosActual[0], 'RAZON') || getCol(clientesInactivosActual[0], 'NOMBRE');
     clientesInactivosActual.forEach(cli => {
-        let tr = document.createElement('tr'); tr.innerHTML = `<td>${cli[colDoc] || '-'}</td><td>${cli[colRazon] || '-'}</td>`; tbody.appendChild(tr);
+        let tr = document.createElement('tr'); tr.innerHTML = `<td>${cli[colDoc] || 'No Registrado'}</td><td>${cli[colRazon] || 'No Registrado'}</td>`; tbody.appendChild(tr);
     });
     document.getElementById('modalInactivos').style.display = 'flex';
 }
+
 function cerrarModalInactivos() { document.getElementById('modalInactivos').style.display = 'none'; }
+
 function poblarTablaHTML(tableId, dataObj, esMoneda) {
     const tbody = document.querySelector(`#${tableId} tbody`); tbody.innerHTML = '';
     let items = Object.keys(dataObj).map(key => ({ label: key, valor: dataObj[key] })).sort((a,b) => b.valor - a.valor).slice(0, 5);
-    if(items.length === 0) { tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:#9aa0a6;">Sin registros de actividad comercial.</td></tr>`; return; }
+    if(items.length === 0) { tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:#9aa0a6;">Sin registros</td></tr>`; return; }
     items.forEach(item => {
         let row = document.createElement('tr');
         let cellLabel = document.createElement('td'); cellLabel.textContent = item.label;
