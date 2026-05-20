@@ -3,212 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Ventas - Dialex</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <title>Dashboard Comercial - Dialex</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans antialiased">
+<body>
 
-    <div id="login-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-blue-600 px-4">
-        <div class="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 text-center transform transition-all dashboard-card">
-            <div class="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-100">
-                <span class="text-blue-600 font-bold text-2xl">DX</span>
-            </div>
-            <h2 class="text-2xl font-bold text-gray-900 mb-2">Acceso Privado Dialex</h2>
-            <p class="text-sm text-gray-500 mb-6">Ingresa tus credenciales para acceder al sistema de ventas.</p>
-            
-            <div class="space-y-4 text-left">
-                <div class="relative">
-                    <input type="password" id="password-input" placeholder="Introduce la contraseña" 
-                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-10 text-center font-mono">
-                </div>
-                <button id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors shadow-lg shadow-blue-200 cursor-pointer">
-                    Ingresar
-                </button>
-            </div>
-            <div id="login-error" class="text-red-500 text-sm mt-3 hidden font-medium">Contraseña incorrecta. Inténtalo de nuevo.</div>
+    <div id="loginScreen">
+        <div class="login-box">
+            <h2>Acceso Privado Dialex</h2>
+            <input type="password" id="passInput" placeholder="Introduce la contraseña" onkeypress="evaluarTeclado(event)">
+            <button onclick="verificarPassword()">Ingresar</button>
+            <div class="error-msg" id="loginError">Contraseña incorrecta. Inténtalo de nuevo.</div>
         </div>
     </div>
 
-    <div id="main-dashboard" class="hidden min-h-screen flex flex-col lg:flex-row">
+    <div id="loadingScreen">
+        <div class="spinner"></div>
+        <h2>Sincronizando con Google Sheets...</h2>
+        <p>Descargando y procesando datos en tiempo real</p>
+    </div>
+
+    <div id="modalInactivos" class="modal-overlay">
+        <div class="modal-content">
+            <span class="modal-close" onclick="cerrarModalInactivos()">&times;</span>
+            <h3 style="color:#ea4335; margin-top:0;">Lista de Clientes Inactivos</h3>
+            <p style="font-size: 0.9rem; color:#5f6368;">Se requiere plan de recuperación para estos contactos.</p>
+            <div class="table-wrapper">
+                <table id="tablaInactivos">
+                    <thead><tr><th>DNI / RUC</th><th>Razón Social</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="appContainer">
         
-        <aside class="w-full lg:w-64 bg-blue-700 text-white flex flex-col lg:min-h-screen shadow-xl z-40">
-            <div class="p-5 flex items-center justify-between border-b border-blue-600">
-                <div class="flex items-center space-x-3">
-                    <span class="font-bold text-xl tracking-wider">DIALEX</span>
-                    <span class="bg-blue-500 text-[10px] uppercase font-bold px-2 py-0.5 rounded">BI</span>
-                </div>
-                <button id="mobile-menu-toggle" class="lg:hidden p-1 text-white hover:bg-blue-600 rounded transition-colors">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                </button>
+        <aside class="sidebar" id="sidebarMenu">
+            <div class="sidebar-header" style="background-color: #0f52ba; display: flex; justify-content: space-between; align-items: center; padding: 15px 20px;">
+                <span>MENÚ PRINCIPAL</span>
+                <button id="btnHamburguesa" style="display: none; background: none; border: none; color: white; font-size: 1.4rem; cursor: pointer; padding: 0; line-height: 1;">☰</button>
+            </div>
+            
+            <div id="contenedorSelectMovil" style="display: none; padding: 10px 15px; background-color: #f8f9fa; border-bottom: 1px solid #e8eaed;">
+                <select id="selectVendedoresMovil" style="width: 100%; padding: 10px; border-radius: 6px; background: #1a73e8; color: white; border: 1px solid #1557b0; font-size: 0.9rem; font-weight: bold;">
+                    <option value="" disabled selected>📱 Seleccionar Vendedor...</option>
+                </select>
             </div>
 
-            <nav id="sidebar-menu" class="hidden lg:flex flex-col p-4 space-y-1 flex-1">
-                <p class="text-xs font-semibold text-blue-300 uppercase tracking-wider px-3 mb-2">Menú Principal</p>
-                <button id="nav-vista-general" class="w-full text-left px-3 py-2.5 rounded-xl font-medium flex items-center space-x-3 bg-blue-800 text-white transition-all cursor-pointer">
-                    <span>Vista General</span>
-                </button>
-                <button id="nav-busqueda-clientes" class="w-full text-left px-3 py-2.5 rounded-xl font-medium flex items-center space-x-3 text-blue-100 hover:bg-blue-600 transition-all cursor-pointer">
-                    <span>Búsqueda Clientes</span>
-                </button>
-
-                <div class="pt-6">
-                    <p class="text-xs font-semibold text-blue-300 uppercase tracking-wider px-3 mb-2">Equipo de Ventas</p>
-                    
-                    <div class="lg:hidden px-3 mb-4">
-                        <select id="mobile-vendedor-select" class="w-full bg-blue-800 text-white border border-blue-500 rounded-xl px-3 py-2.5 outline-none text-sm">
-                            </select>
-                    </div>
-
-                    <div id="vendedores-list" class="hidden lg:flex flex-col space-y-1 max-h-[50vh] overflow-y-auto pr-1">
-                        </div>
-                </div>
-            </nav>
+            <ul class="vendedores-list nav-tabs" style="flex: none; border-bottom: 2px solid #e8eaed;">
+                <li id="tabGlobal" class="active" onclick="abrirVistaGlobal()">📊 VISTA GENERAL</li>
+                <li id="tabBusqueda" onclick="abrirVistaBusqueda()">🔍 BÚSQUEDA CLIENTES</li>
+            </ul>
+            
+            <div class="sidebar-header" id="headerEquipoVentas">Equipo de Ventas</div>
+            <ul class="vendedores-list" id="listaVendedores">
+            </ul>
         </aside>
 
-        <main class="flex-1 p-4 lg:p-8 overflow-x-hidden">
+        <main class="main-content">
             
-            <section id="section-vista-general" class="space-y-6">
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between border-b border-gray-200 pb-4">
-                    <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Vista General - Mayo 2026</h1>
-                    <p class="text-sm text-gray-500 mt-1 md:mt-0">Datos actualizados en tiempo real</p>
-                </div>
+            <div id="vistaDashboard">
+                <h1 class="header-title">
+                    <span id="tituloDashboard">Vista General - Mayo 2026</span>
+                    <span id="tipoVendedorTag" class="tag-tipo">COBERTURA</span>
+                </h1>
+                
+                <div class="kpi-resumen" id="contenedorKPIs"></div>
 
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 dashboard-card">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Venta Total</p>
-                        <p id="kpi-venta-total" class="text-lg lg:text-2xl font-bold text-blue-600 mt-1">S/ 0.00</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 dashboard-card">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Meta General</p>
-                        <p id="kpi-meta-general" class="text-lg lg:text-2xl font-bold text-gray-800 mt-1">S/ 0.00</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 dashboard-card">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Clientes</p>
-                        <p id="kpi-total-clientes" class="text-lg lg:text-2xl font-bold text-gray-800 mt-1">0</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 dashboard-card">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Nuevos Mayo</p>
-                        <p id="kpi-nuevos-mayo" class="text-lg lg:text-2xl font-bold text-emerald-600 mt-1">0</p>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col justify-between min-h-[340px]">
-                        <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider text-center mb-2">Avance de la Meta</h3>
-                        <div class="flex-1 flex items-center justify-center min-h-[220px]">
-                            <div id="chart-avance-meta" class="w-full max-w-[240px] mx-auto"></div>
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <h3>Avance de la Meta</h3>
+                        <div class="chart-container" style="max-width: 260px;">
+                            <canvas id="chartVelocimetro"></canvas>
+                            <div class="speedometer-text" id="textoVelocimetro">0%</div>
                         </div>
                     </div>
-                    
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 lg:col-span-2 flex flex-col justify-between min-h-[340px]">
-                        <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Porcentaje de Venta por Canales</h3>
-                        <div class="flex-1 flex items-center justify-center min-h-[220px]">
-                            <div id="chart-venta-canales" class="w-full"></div>
+                    <div class="card">
+                        <h3 id="tituloGraficoDona">Distribución</h3>
+                        <div class="chart-container" style="max-width: 240px;">
+                            <canvas id="chartDona"></canvas>
                         </div>
                     </div>
-                </div>
-
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 w-full">
-                    <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4">Comportamiento de Ventas por Días</h3>
-                    <div id="chart-comportamiento-ventas" class="w-full min-h-[280px]"></div>
-                </div>
-            </section>
-
-            <section id="section-vendedor" class="space-y-6 hidden">
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 pb-4 gap-2">
-                    <div>
-                        <h1 id="vendedor-nombre" class="text-2xl lg:text-3xl font-bold text-gray-900">Análisis de Vendedor</h1>
-                        <p class="text-sm text-gray-500 mt-0.5">Métricas de rendimiento individual</p>
-                    </div>
-                    <div>
-                        <span id="vendedor-canal" class="inline-block bg-blue-50 text-blue-700 text-xs uppercase font-bold tracking-wider px-3 py-1.5 rounded-full border border-blue-200 shadow-sm">CALL CENTER</span>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 dashboard-card">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Venta Acumulada</p>
-                        <p id="kpi-vendedor-venta" class="text-lg lg:text-2xl font-bold text-blue-600 mt-1">S/ 0.00</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 dashboard-card">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Meta Asignada</p>
-                        <p id="kpi-vendedor-meta" class="text-lg lg:text-2xl font-bold text-gray-800 mt-1">S/ 0.00</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 dashboard-card">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Clientes Totales</p>
-                        <p id="kpi-vendedor-clientes" class="text-lg lg:text-2xl font-bold text-gray-800 mt-1">0</p>
-                    </div>
-                    <button id="btn-ver-inactivos" class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 text-left hover:border-red-200 hover:bg-red-50/50 transition-all dashboard-card cursor-pointer group focus:outline-none focus:ring-2 focus:ring-red-400">
-                        <div class="flex justify-between items-start">
-                            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-red-500 transition-colors">Inactivos (Ver Lista)</p>
-                            <span class="text-gray-400 group-hover:text-red-500 transition-colors">🔍</span>
-                        </div>
-                        <p id="kpi-vendedor-inactivos" class="text-lg lg:text-2xl font-bold text-red-600 mt-1">0</p>
-                    </button>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between min-h-[320px]">
-                        <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider text-center mb-2">Avance de la Meta</h3>
-                        <div class="flex-1 flex items-center justify-center min-h-[220px]">
-                            <div id="chart-vendedor-avance" class="w-full max-w-[240px] mx-auto"></div>
+                    <div class="card full-width" id="cardGlobalLinea">
+                        <h3>Comportamiento de Ventas x Días</h3>
+                        <div class="chart-container responsive-chart">
+                            <canvas id="chartLinea"></canvas>
                         </div>
                     </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 lg:col-span-2 flex flex-col justify-between min-h-[320px]">
-                        <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Clientes Activos vs Inactivos</h3>
-                        <div class="flex-1 flex items-center justify-center min-h-[220px]">
-                            <div id="chart-vendedor-clientes-pie" class="w-full"></div>
+                    <div class="card full-width" id="cardGlobalRankingMeta">
+                        <h3>Ranking x % de Meta Cumplida (Proyección al 100%)</h3>
+                        <div class="chart-container responsive-chart" style="padding-top: 15px;">
+                            <canvas id="chartRankingMeta"></canvas>
                         </div>
                     </div>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4">Ranking Productos por Unidad</h3>
-                        <div id="chart-vendedor-ranking-unidad" class="w-full min-h-[250px]"></div>
+                    <div class="card" id="cardVendedorProdUnid" style="display:none;">
+                        <h3>Ranking Productos x Unidad</h3>
+                        <div class="table-wrapper"><table id="tablaProdUnid"><thead><tr><th>Producto</th><th class="num-col">Unidades</th></tr></thead><tbody></tbody></table></div>
                     </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4">Ranking Productos por Caja</h3>
-                        <div id="chart-vendedor-ranking-caja" class="w-full min-h-[250px]"></div>
+                    <div class="card" id="cardVendedorProdCaja" style="display:none;">
+                        <h3>Ranking Productos x Caja</h3>
+                        <div class="table-wrapper"><table id="tablaProdCaja"><thead><tr><th>Producto</th><th class="num-col">Cajas</th></tr></thead><tbody></tbody></table></div>
                     </div>
-                </div>
-            </section>
-
-            <section id="section-busqueda" class="space-y-6 hidden">
-                <div class="border-b border-gray-200 pb-4">
-                    <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Inteligencia de Clientes</h1>
-                    <p class="text-sm text-gray-500 mt-0.5">Analiza el historial y comportamiento de compra de un cliente específico</p>
-                </div>
-
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-3xl">
-                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Buscar Cliente</label>
-                    <div class="flex flex-col sm:flex-row gap-3">
-                        <input type="text" id="cliente-search-input" placeholder="Escribe el nombre del cliente (ej. ABI FARMA S.R.L.)" 
-                               class="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
-                        <button id="btn-analizar-cliente" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-xl transition-all shadow-md shadow-blue-100 flex items-center justify-center space-x-2 cursor-pointer">
-                            <span>🔍</span> <span>Analizar Cliente</span>
-                        </button>
+                    <div class="card full-width" id="cardVendedorClientes" style="display:none;">
+                        <h3>Ranking de Clientes del Vendedor</h3>
+                        <div class="table-wrapper"><table id="tablaClientesVend"><thead><tr><th>Razón Social</th><th class="num-col">Total Facturado (S/)</th></tr></thead><tbody></tbody></table></div>
                     </div>
                 </div>
+            </div>
 
-                <div id="cliente-analisis-resultados" class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 lg:col-span-1 text-center lg:text-left">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Comprado (Mayo)</p>
-                        <p id="kpi-cliente-total-comprado" class="text-2xl lg:text-3xl font-extrabold text-blue-600 mt-2">S/ 0.00</p>
-                        <div class="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-500">
-                            Basado en los últimos reportes cargados para este periodo.
+            <div id="vistaBusqueda" style="display: none;">
+                <h1 class="header-title">Inteligencia de Clientes</h1>
+                
+                <div class="search-container">
+                    <input type="text" id="inputBusquedaCliente" class="search-input" list="listaNombresClientes" placeholder="Escribe o selecciona la Razón Social del cliente..." onkeypress="evaluarEnterBusqueda(event)">
+                    <datalist id="listaNombresClientes"></datalist>
+                    <button class="search-btn" onclick="ejecutarBusquedaCliente()">🔍 Analizar Cliente</button>
+                </div>
+
+                <div class="kpi-resumen" id="kpiBusqueda">
+                    </div>
+
+                <div class="dashboard-grid" id="gridResultadosCliente" style="display:none;">
+                    <div class="card full-width">
+                        <h3>Comportamiento de Compra en el Tiempo</h3>
+                        <div class="chart-container responsive-chart">
+                            <canvas id="chartLineaCliente"></canvas>
                         </div>
                     </div>
-                    
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 lg:col-span-2">
-                        <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4">Comportamiento de Compra en el Tiempo</h3>
-                        <div id="chart-cliente-historico" class="w-full min-h-[250px]"></div>
+                    <div class="card">
+                        <h3>Historial Productos x Caja</h3>
+                        <div class="table-wrapper"><table id="tablaBusquedaCaja"><thead><tr><th>Producto</th><th class="num-col">Cajas Compradas</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="card">
+                        <h3>Historial Productos x Unidad</h3>
+                        <div class="table-wrapper"><table id="tablaBusquedaUnid"><thead><tr><th>Producto</th><th class="num-col">Unid. Compradas</th></tr></thead><tbody></tbody></table></div>
                     </div>
                 </div>
-            </section>
+            </div>
 
         </main>
     </div>
