@@ -70,11 +70,13 @@ async function inicializarApp() {
         db.clientes = parseCSV(await resCli.text());
         
         poblarSidebar();
-        cargarVistaGlobal(document.getElementById('tabGlobal'));
         prepararBuscador();
         
         document.getElementById('loadingScreen').style.display = 'none';
-        document.getElementById('appContainer').style.visibility = 'visible';
+        
+        // Al terminar de cargar, mostramos el Menú Principal
+        mostrarMenuPrincipal();
+        
     } catch (error) { 
         console.error(error); 
         alert("Error descargando datos. Revisa la conexión."); 
@@ -114,7 +116,39 @@ function prepararBuscador() {
     });
 }
 
-// --- NAVEGACIÓN DE PESTAÑAS ---
+// --- LOGICA DEL MENÚ PRINCIPAL ---
+function mostrarMenuPrincipal() {
+    document.getElementById('appContainer').style.display = 'none';
+    document.getElementById('menuPrincipalScreen').style.display = 'flex';
+}
+
+function entrarAApp() {
+    document.getElementById('menuPrincipalScreen').style.display = 'none';
+    document.getElementById('appContainer').style.display = 'flex';
+}
+
+function abrirVistaGlobalDesdeMenu() {
+    entrarAApp();
+    abrirVistaGlobal();
+}
+
+function abrirVistaBusquedaDesdeMenu() {
+    entrarAApp();
+    abrirVistaBusqueda();
+}
+
+function abrirVistaVendedoresDesdeMenu() {
+    entrarAApp();
+    // Simula el clic en el primer vendedor de la lista para mostrar el panel
+    let primerVendedor = document.querySelectorAll('#listaVendedores li')[0];
+    if(primerVendedor) {
+        primerVendedor.click();
+    } else {
+        abrirVistaGlobal();
+    }
+}
+
+// --- NAVEGACIÓN DE PESTAÑAS INTERNAS ---
 function abrirVistaGlobal() {
     document.getElementById('vistaDashboard').style.display = 'block';
     document.getElementById('vistaBusqueda').style.display = 'none';
