@@ -14,6 +14,7 @@
     <div id="loginScreen">
         <div class="login-box">
             <h2>Acceso Dialex</h2>
+            <p id="loginUpdateInfo" style="font-size: 0.82rem; color: #1a73e8; margin: -10px 0 20px 0; font-weight: 700; background: #e8f0fe; padding: 6px 14px; border-radius: 20px; display: inline-block; letter-spacing: 0.2px;">🔄 Conectando con Google Sheets...</p>
             <input type="password" id="passInput" placeholder="Contraseña" onkeyup="evaluarTeclado(event)">
             <button onclick="verificarPassword()">Ingresar</button>
             <p class="error-msg" id="loginError">Contraseña incorrecta</p>
@@ -63,21 +64,21 @@
                         </div>
                     </div>
                     <div class="card full-width">
-    <h3>Tendencia de Ventas x Días</h3>
-    <div class="chart-scroll-x"> 
-        <div class="chart-container responsive-chart">
-            <canvas id="chartLineaGeneral"></canvas>
-        </div>
-    </div>
-    </div>
-<div class="card full-width">
-    <h3>Ranking de Cumplimiento de Meta</h3>
-    <div class="chart-scroll-x"> 
-        <div class="chart-container responsive-chart">
-            <canvas id="chartRankingMeta"></canvas>
-        </div>
-    </div>
-    </div>
+                        <h3>Tendencia de Ventas x Días</h3>
+                        <div class="chart-scroll-x">
+                            <div class="chart-container responsive-chart">
+                                <canvas id="chartLineaGeneral"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card full-width">
+                        <h3>Ranking de Cumplimiento de Meta</h3>
+                        <div class="chart-scroll-x">
+                            <div class="chart-container responsive-chart">
+                                <canvas id="chartRankingMeta"></canvas>
+                            </div>
+                        </div>
+                    </div>
                     <div class="card full-width">
                         <h3>Cobertura Geográfica Nacional</h3>
                         <div id="ContenedorMapaGeneral" class="mapa-contenedor"></div>
