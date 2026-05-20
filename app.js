@@ -147,7 +147,6 @@ function generarIndices() {
         clientesPorId: {}
     };
 
-    // 1. Crear Diccionario de Auto-Rescate (Documento -> ID_CLIENTE)
     const docToIdMap = {};
     db.clientes.forEach(c => {
         const idC = normalizarTexto(c[COLS.clientes.id]);
@@ -164,16 +163,14 @@ function generarIndices() {
         }
     });
 
-    // 2. Procesar Ventas e inyectar el ID_CLIENTE si falta
     db.ventas.forEach(v => {
         const idV = normalizarTexto(v[COLS.ventas.idVendedor]);
         let idC = normalizarTexto(v[COLS.ventas.idCliente]);
         const doc = normalizarTexto(v[COLS.ventas.documento]);
 
-        // AUTO-RESCATE DE DATOS: Si en ventas falta el ID, lo copiamos de la base de clientes usando el RUC/DNI
         if (!idC && doc && docToIdMap[doc]) {
             idC = docToIdMap[doc];
-            v[COLS.ventas.idCliente] = idC; // Mutamos el registro para arreglarlo en memoria
+            v[COLS.ventas.idCliente] = idC; 
         }
 
         if (idV) {
@@ -186,7 +183,6 @@ function generarIndices() {
         }
     });
 
-    // 3. Procesar Productos e inyectar ID_CLIENTE si falta
     db.productos.forEach(p => {
         const idV = normalizarTexto(p[COLS.productos.idVendedor]);
         let idC = normalizarTexto(p[COLS.productos.idCliente]);
@@ -381,43 +377,23 @@ function inyectarMapaNacional(idContenedorPadre, arrayCliData) {
     }
 }
 
-// DOBLE SEGURO DE EVALUACIÓN DE INACTIVOS
+// LÓGICA DIRECTA: LEE TU EXCEL Y OBEDECE A LA COLUMNA "ESTADO DE VENTA"
 function obtenerInactivosReales(idVendedorFiltro) {
-    const compradoresActivos = new Set(); 
-
-    db.ventas.forEach(v => {
-        const idC = normalizarTexto(v[COLS.ventas.idCliente]);
-        const doc = normalizarTexto(v[COLS.ventas.documento]);
-        const idVendVenta = normalizarTexto(v[COLS.ventas.idVendedor]);
-
-        if (idVendedorFiltro === 'GLOBAL' || idVendVenta === idVendedorFiltro) {
-            if (idC) compradoresActivos.add(idC);
-            if (doc) compradoresActivos.add(doc); // Salvavidas: guardar el doc también por si el ID falló
-        }
-    });
-
-    const inactivosUnicos = new Map(); 
+    const inactivosList = [];
 
     db.clientes.forEach(c => {
-        const idCliente = normalizarTexto(c[COLS.clientes.id]);
-        const docCliente = normalizarTexto(c[COLS.clientes.documento]);
         const vendedorDir = normalizarTexto(c[COLS.clientes.idVendedor]);
+        const estadoVenta = normalizarTexto(c[COLS.clientes.estado]); 
         
         const pertenece = (idVendedorFiltro === 'GLOBAL') ? true : (vendedorDir === idVendedorFiltro);
         
-        // Verificamos si compró con su ID_CLIENTE *o* directamente con su RUC/DNI
-        const tieneVentas = (idCliente && compradoresActivos.has(idCliente)) || 
-                            (docCliente && compradoresActivos.has(docCliente));
-
-        if (pertenece && !tieneVentas) {
-            const key = idCliente || docCliente || Math.random().toString();
-            if (!inactivosUnicos.has(key)) {
-                inactivosUnicos.set(key, c); 
-            }
+        // Si tu base de datos dice "INACTIVO", el dashboard lo marca como inactivo. Directo.
+        if (pertenece && estadoVenta.includes('INACTIVO')) {
+            inactivosList.push(c);
         }
     });
 
-    return Array.from(inactivosUnicos.values());
+    return inactivosList;
 }
 
 function cargarDataGeneral() {
@@ -551,7 +527,7 @@ function cargarDataVendedor(vdData) {
 
     crearOActualizarChart('chartDonaVendedor', {
         type: 'pie',
-        data: { labels: ['Activos Comprando', 'Inactivos (Riesgo)'], datasets: [{ data: [activosCount, inactivosCartera.length], backgroundColor: ['#34a853', '#ea4335'] }] },
+        data: { labels: ['Activos Registrados', 'Inactivos Registrados'], datasets: [{ data: [activosCount, inactivosCartera.length], backgroundColor: ['#34a853', '#ea4335'] }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
     });
 
@@ -792,12 +768,14 @@ function mostrarModalInactivos(idVendedor, nombreVendedor) {
     const clientesInactivos = obtenerInactivosReales(idVendedor);
 
     if (clientesInactivos.length === 0) {
-        tb.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:#666;">¡Felicidades! Toda la cartera registra compras efectivas.</td></tr>`;
+        tb.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:#666;">No hay clientes marcados como inactivos en la base de datos.</td></tr>`;
     } else {
         const frag = document.createDocumentFragment();
         clientesInactivos.forEach(c => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${c[COLS.clientes.documento] || '---'}</td><td>${c[COLS.clientes.razon] || '---'}</td><td><span class="badge badge-inactivo">0 TRANSACCIONES</span></td>`;
+            // Muestra el texto tal cual está en tu base de datos Clientes
+            const estadoReal = c[COLS.clientes.estado] || 'INACTIVO';
+            tr.innerHTML = `<td>${c[COLS.clientes.documento] || '---'}</td><td>${c[COLS.clientes.razon] || '---'}</td><td><span class="badge badge-inactivo">${estadoReal}</span></td>`;
             frag.appendChild(tr);
         });
         tb.appendChild(frag);
