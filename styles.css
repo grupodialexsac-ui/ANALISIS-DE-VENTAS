@@ -496,10 +496,14 @@ tr:hover { background-color: #fdfdfd; }
    DISEÑO ADAPTATIVO MÓVIL ESTRICTO (RESPONSIVE)
    ========================================= */
 @media (max-width: 960px) {
-    html, body {
-        overflow-x: hidden;
-        overflow-y: auto;
+    
+    /* ... tus otros estilos de celular ... */
+
+    /* Fuerza el ancho de los gráficos para que se puedan deslizar */
+    .chart-scroll-x .responsive-chart {
+        min-width: 800px; 
     }
+}
 
     body, #appContainer {
         flex-direction: column;
@@ -598,4 +602,12 @@ tr:hover { background-color: #fdfdfd; }
     th, td {
         padding: 9px 10px;
     }
+    /* CONTENEDOR PARA SCROLL HORIZONTAL DE GRÁFICOS */
+.chart-scroll-x {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    flex: 1; 
+}
 }
