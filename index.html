@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Dialex Comercial</title>
+    <title>Dashboard Dialex Profesional</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -14,25 +14,28 @@
     <div id="loginScreen">
         <div class="login-box">
             <h2>Acceso Dialex</h2>
-            <input type="password" id="passInput" placeholder="Contraseña" onkeyup="evaluarTeclado(e)">
+            <input type="password" id="passInput" placeholder="Contraseña" onkeyup="evaluarTeclado(event)">
             <button onclick="verificarPassword()">Ingresar</button>
-            <p id="loginError" style="display:none; color:#ea4335; margin-top:10px;">Contraseña Incorrecta</p>
+            <p id="loginError" class="error-msg">Contraseña incorrecta</p>
         </div>
     </div>
-    
+
     <div id="loadingScreen">
         <div class="spinner"></div>
-        <p id="loadingTitle">Sincronizando Base de Datos...</p>
+        <p id="loadingTitle">Sincronizando bases de datos...</p>
     </div>
 
-    <div id="appContainer" style="visibility: hidden;">
+    <div id="appContainer">
         <aside class="sidebar">
-            <div class="sidebar-header"><h3>SISTEMA DIALEX</h3></div>
-            <ul class="modulos-list" id="listaModulos">
-                <li class="active" onclick="cambiarModulo('general', this)">VISTA GENERAL</li>
-                <li onclick="cambiarModulo('productividad', this)">PRODUCTIVIDAD VENDEDORES</li>
-                <li onclick="cambiarModulo('situacion', this)">ESTRATEGIA RENTABILIDAD</li>
-                <li onclick="cambiarModulo('busqueda', this)">DIRECTORIO CLIENTES</li>
+            <div class="sidebar-header">
+                <h3>SISTEMA DIALEX</h3>
+                <p>Comercial v2.5</p>
+            </div>
+            <ul class="modulos-list">
+                <li class="active" onclick="cambiarModulo('general', this)">GENERAL</li>
+                <li onclick="cambiarModulo('productividad', this)">PRODUCTIVIDAD</li>
+                <li onclick="cambiarModulo('situacion', this)">SITUACIÓN</li>
+                <li onclick="cambiarModulo('busqueda', this)">BÚSQUEDA</li>
             </ul>
         </aside>
 
@@ -47,116 +50,158 @@
                 <div class="kpi-resumen" id="kpiGeneral"></div>
                 <div class="dashboard-grid">
                     <div class="card">
-                        <h3>Avance de Meta General</h3>
-                        <div class="chart-container" style="position: relative;">
+                        <h3>Avance Meta General</h3>
+                        <div class="chart-container">
                             <canvas id="chartVelocimetroGeneral"></canvas>
-                            <div id="textoVelocimetroGeneral" style="position: absolute; top: 75%; left: 50%; transform: translate(-50%, -50%); font-size: 24px; font-weight: bold;">0%</div>
+                            <div id="textoVelocimetroGeneral" class="speed-text">0%</div>
                         </div>
                     </div>
                     <div class="card">
-                        <h3>Participación por Canales</h3>
-                        <div class="chart-container"><canvas id="chartDonaGeneral"></canvas></div>
+                        <h3>Canales de Distribución</h3>
+                        <div class="chart-container">
+                            <canvas id="chartDonaGeneral"></canvas>
+                        </div>
                     </div>
                     <div class="card full-width">
-                        <h3>Tendencia de Ventas por Días</h3>
-                        <div class="chart-container"><canvas id="chartLineaGeneral"></canvas></div>
+                        <h3>Ventas por Días</h3>
+                        <div class="chart-container-linea">
+                            <canvas id="chartLineaGeneral"></canvas>
+                        </div>
                     </div>
                     <div class="card full-width">
-                        <h3>Ranking de Cumplimiento Meta</h3>
-                        <div class="chart-container"><canvas id="chartRankingMeta"></canvas></div>
+                        <h3>Ranking de Vendedores - Avance de Meta (%)</h3>
+                        <div class="chart-ranking-container">
+                            <canvas id="chartRankingMeta"></canvas>
+                        </div>
                     </div>
                     <div class="card full-width">
-                        <h3>Cobertura de Distribución Nacional</h3>
-                        <div id="ContenedorMapaGeneral" class="mapa-contenedor" style="height: 400px;"></div>
+                        <h3>Ranking de Vendedores - Venta Total Absoluta (S/)</h3>
+                        <div class="chart-ranking-container">
+                            <canvas id="chartRankingVenta"></canvas>
+                        </div>
+                    </div>
+                    <div class="card full-width">
+                        <h3>Cobertura Nacional</h3>
+                        <div id="mapaGeneral" class="mapa-contenedor"></div>
                     </div>
                 </div>
             </div>
 
             <div id="vistaProductividad" class="modulo-view" style="display: none;">
-                <div id="estadoVendedorSeleccion" style="text-align: center; padding: 40px; color: #666;">
-                    <h3>Por favor, selecciona un vendedor en la barra superior.</h3>
-                </div>
-                <div id="contenidoProductividad" style="display: none;">
-                    <div id="kpiVendedor" class="kpi-resumen"></div>
-                    <div class="dashboard-grid">
-                        <div class="card">
-                            <h3>Avance de Meta Individual</h3>
-                            <div class="chart-container" style="position: relative;">
-                                <canvas id="chartVelocimetroVendedor"></canvas>
-                                <div id="textoVelocimetroVendedor" style="position: absolute; top: 75%; left: 50%; transform: translate(-50%, -50%); font-size: 24px; font-weight: bold;">0%</div>
-                            </div>
+                <div id="kpiVendedor" class="kpi-resumen"></div>
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <h3>Avance Meta Individual</h3>
+                        <div class="chart-container">
+                            <canvas id="chartVelocimetroVendedor"></canvas>
+                            <div id="textoVelocimetroVendedor" class="speed-text">0%</div>
                         </div>
-                        <div class="card">
-                            <h3>Estructura Logrado vs Faltante</h3>
-                            <div class="chart-container"><canvas id="chartDonaVendedor"></canvas></div>
+                    </div>
+                    <div class="card">
+                        <h3>Estructura Logrado vs Faltante</h3>
+                        <div class="chart-container">
+                            <canvas id="chartDonaVendedor"></canvas>
                         </div>
-                        <div class="card">
-                            <h3>Top Productos (Unidades)</h3>
-                            <div class="table-wrapper"><table id="tablaProdUnid"><thead><tr><th>Producto</th><th>Unidades</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="card">
+                        <h3>Top Productos (Unidades)</h3>
+                        <div class="table-wrapper">
+                            <table id="tablaProdUnid">
+                                <thead><tr><th>Producto</th><th class="num-col">Unidades</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
                         </div>
-                        <div class="card">
-                            <h3>Top Productos (Cajas)</h3>
-                            <div class="table-wrapper"><table id="tablaProdCaja"><thead><tr><th>Producto</th><th>Cajas</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="card">
+                        <h3>Top Productos (Cajas)</h3>
+                        <div class="table-wrapper">
+                            <table id="tablaProdCaja">
+                                <thead><tr><th>Producto</th><th class="num-col">Cajas</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
                         </div>
-                        <div class="card full-width">
-                            <h3>Ruta Geográfica del Vendedor</h3>
-                            <div id="ContenedorMapaVendedor" class="mapa-contenedor" style="height: 400px;"></div>
-                        </div>
+                    </div>
+                    <div class="card full-width">
+                        <h3>Cartera Geográfica del Vendedor</h3>
+                        <div id="mapaVendedor" class="mapa-contenedor"></div>
                     </div>
                 </div>
             </div>
 
             <div id="vistaSituacion" class="modulo-view" style="display: none;">
-                <div class="kpi-resumen" id="kpiSituacion">
-                    <div class="kpi-box"><h4>Ticket Promedio</h4><span id="kpiTicketPromedio">S/ 0.00</span></div>
-                    <div class="kpi-box"><h4>Frecuencia de Compra</h4><span id="kpiFrecuencia">0</span></div>
-                    <div class="kpi-box destacado"><h4>Clientes en Riesgo</h4><span id="kpiRiesgo">0</span></div>
-                </div>
+                <div class="kpi-resumen" id="kpiSituacion"></div>
                 <div class="dashboard-grid">
                     <div class="card full-width">
-                        <h3>Clasificación de Clientes (Segmentación ABC)</h3>
+                        <h3>Segmentación de Clientes ABC</h3>
                         <div class="table-wrapper">
-                            <table id="tablaABC"><thead><tr><th>Cliente</th><th>Segmento</th><th>Total Facturado</th></tr></thead><tbody></tbody></table>
+                            <table id="tablaABC">
+                                <thead><tr><th>Cliente</th><th>Segmento</th><th class="num-col">Total Facturado</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
                         </div>
                     </div>
                     <div class="card full-width">
-                        <h3>Densidad de Clientes Activos</h3>
-                        <div id="ContenedorMapaSituacion" class="mapa-contenedor" style="height: 400px;"></div>
+                        <h3>Distribución de Clientes Activos</h3>
+                        <div id="mapaSituacion" class="mapa-contenedor"></div>
                     </div>
                 </div>
             </div>
 
             <div id="vistaBusqueda" class="modulo-view" style="display: none;">
-                <input type="text" id="inputBusquedaCliente" placeholder="Buscar por RUC, DNI o Razón Social..." onkeyup="filtrarDirectorioClientes()" style="width:100%; padding:12px; margin-bottom:15px; border-radius:6px; border:1px solid #ccc; font-size:16px;">
-                <div class="split-layout" style="display: flex; gap: 20px;">
-                    <div class="card split-left" style="flex: 1; max-height: 600px; overflow-y: auto;">
+                <input type="text" id="inputBusquedaCliente" placeholder="Buscar por RUC, DNI o Razón Social..." onkeyup="filtrarDirectorioClientes()" style="width:100%; padding:12px; margin-bottom:15px; border-radius: 6px; border: 1px solid #dadce0; font-size:1rem;">
+                <div class="split-layout">
+                    <div class="card split-left">
+                        <h3>Clientes Registrados</h3>
                         <div class="table-wrapper">
-                            <table id="tablaDirectorioClientes"><thead><tr><th>Documento</th><th>Razón Social</th></tr></thead><tbody></tbody></table>
+                            <table id="tablaDirectorioClientes">
+                                <thead><tr><th>Documento</th><th>Razón Social</th><th>Celular</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
                         </div>
                     </div>
-                    <div class="card split-right" id="panelDetalleCliente" style="flex: 1; display:none; padding: 20px;">
-                        <h2 id="detalleNombreCliente" style="margin-top:0;">-</h2>
-                        <p><b>Documento:</b> <span id="detalleDocCliente">-</span></p>
-                        <p><b>Estado Actual:</b> <span id="detalleEstadoCli">-</span></p>
-                        <p><b>Total Histórico Facturado:</b> <span id="detalleTotalVenta" style="font-size:18px; font-weight:bold; color:#34a853;">S/ 0.00</span></p>
-                        
-                        <h3>Historial de Ventas</h3>
-                        <div class="chart-container" style="height:200px;"><canvas id="chartClienteHistorial"></canvas></div>
-                        
-                        <h3>Mix de Productos Adquiridos</h3>
-                        <div class="table-wrapper"><table id="tablaClienteProductos"><thead><tr><th>Producto</th><th>Cantidad</th></tr></thead><tbody></tbody></table></div>
+                    <div class="card split-right" id="panelDetalleCliente" style="display:none;">
+                        <h3>Ficha del Cliente Analítica</h3>
+                        <div class="detalle-header">
+                            <h2 id="detalleNombreCliente">---</h2>
+                            <p><b>Documento:</b> <span id="detalleDocCliente">---</span></p>
+                            <p><b>Celular:</b> <span id="detalleCelCliente">---</span></p>
+                            <p><b>Estado de Venta:</b> <span id="detalleEstadoCli">---</span></p>
+                            <p><b>Total Histórico Comprado:</b> <span id="detalleTotalVenta" style="font-weight: bold; color: #1a73e8;">---</span></p>
+                        </div>
+                        <div class="detalle-grafico">
+                            <h4>Historial de Compras por Fecha</h4>
+                            <div style="height: 180px; position: relative;"><canvas id="chartClienteHistorial"></canvas></div>
+                        </div>
+                        <div class="detalle-tabla">
+                            <h4>Mix de Productos Adquiridos</h4>
+                            <div class="table-wrapper">
+                                <table id="tablaClienteProductos">
+                                    <thead><tr><th>Producto</th><th class="num-col">Volumen Total</th></tr></thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <div id="modalInactivos" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-        <div style="background:#fff; padding:25px; border-radius:8px; width:90%; max-width:600px; max-height:80vh; overflow-y:auto; position:relative;">
-            <button onclick="cerrarModalInactivos()" style="position:absolute; top:10px; right:15px; border:none; background:none; font-size:22px; cursor:pointer;">&times;</button>
-            <h3>Directorio Completo de la Cartera</h3>
-            <div class="table-wrapper">
-                <table id="tablaInactivos"><thead><tr><th>Documento</th><th>Cliente</th><th>Estado</th></tr></thead><tbody></tbody></table>
+    <div id="modalInactivos" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <span class="modal-close" onclick="cerrarModalInactivos()">&times;</span>
+            <h3 id="modalInactivosTitulo" style="margin-top:0; color:#d93025;">Listado de Clientes Inactivos</h3>
+            <div class="table-wrapper" style="margin-top:15px; max-height:60vh; overflow-y:auto;">
+                <table id="tablaInactivos">
+                    <thead>
+                        <tr>
+                            <th>Documento</th>
+                            <th>Razón Social</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
             </div>
         </div>
     </div>
