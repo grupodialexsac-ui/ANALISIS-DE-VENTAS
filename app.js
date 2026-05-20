@@ -16,9 +16,9 @@ let COLS = { vendedores: {}, ventas: {}, productos: {}, clientes: {} };
 let cache = {
     ventasPorVendedor: {},
     clientesPorVendedor: {},
-    ventasPorIdCliente: {}, // NUEVO CACHÉ POR ID
+    ventasPorIdCliente: {},
     productosPorVendedor: {},
-    clientesPorId: {} // NUEVO CACHÉ POR ID
+    clientesPorId: {}
 };
 
 function normalizarTexto(t) {
@@ -115,7 +115,7 @@ function inicializarColumnas() {
         },
         ventas: {
             idVendedor: getColExacto(db.ventas[0], ['ID_VENDEDOR']),
-            idCliente: getColExacto(db.ventas[0], ['ID_CLIENTE']), // PRIMORDIAL AHORA
+            idCliente: getColExacto(db.ventas[0], ['ID_CLIENTE']), 
             total: getColExacto(db.ventas[0], ['PRECIO TOTAL', 'TOTAL']),
             fecha: getColExacto(db.ventas[0], ['FECHA DE VENTA', 'FECHA']),
             documento: getColExacto(db.ventas[0], ['Documento_Numero', 'RUC', 'DNI']),
@@ -130,7 +130,7 @@ function inicializarColumnas() {
             caja: getColExacto(db.productos[0], ['CANTIDAD CAJA', 'CAJA'])
         },
         clientes: {
-            id: getColExacto(db.clientes[0], ['ID_CLIENTE']), // IDENTIFICADOR MAESTRO
+            id: getColExacto(db.clientes[0], ['ID_CLIENTE']), // IDENTIFICADOR MATEMÁTICO MAESTRO
             documento: getColExacto(db.clientes[0], ['Documento_Numero', 'RUC', 'DNI']),
             razon: getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'RAZON SOCIAL', 'NOMBRE']),
             ubicacion: getColExacto(db.clientes[0], ['UBICACIÓN', 'UBICACION', 'DIRECCION']),
@@ -210,16 +210,11 @@ async function inicializarApp() {
         generarIndices();
         generarMenuVendedores();
 
-        // 1. Iniciamos el modulo en "background"
         cambiarModulo('general', document.querySelector('.modulos-list li'));
 
-        // 2. Retrasamos la aparición de la app 600ms para asegurar que ChartJS termine de pintar
-        // Esto soluciona el problema de que cargue "en blanco".
         setTimeout(() => {
             document.getElementById('loadingScreen').style.display = 'none';
             document.getElementById('appContainer').style.visibility = 'visible';
-            
-            // Forzamos un redimensionamiento final
             Object.values(charts).forEach(c => c.resize());
         }, 600);
 
@@ -366,9 +361,9 @@ function inyectarMapaNacional(idContenedorPadre, arrayCliData) {
     }
 }
 
-// LOGICA ACTUALIZADA PARA DETECTAR INACTIVOS REALES USANDO ID_CLIENTE
+// NUEVA LÓGICA: USO ESTRICTO DE "MAPS" Y "SETS" PARA NO CONTAR FILAS DUPLICADAS DE ID
 function obtenerInactivosReales(idVendedorFiltro) {
-    const compradoresActivos = new Set();
+    const compradoresActivos = new Set(); // Guarda ID únicos que SÍ compraron
 
     db.ventas.forEach(v => {
         const idC = normalizarTexto(v[COLS.ventas.idCliente]);
@@ -379,13 +374,22 @@ function obtenerInactivosReales(idVendedorFiltro) {
         }
     });
 
-    return db.clientes.filter(c => {
+    // Usamos un Map para evitar guardar el mismo ID_CLIENTE dos veces si aparece en dos filas
+    const inactivosUnicos = new Map(); 
+
+    db.clientes.forEach(c => {
         const idCliente = normalizarTexto(c[COLS.clientes.id]);
         const vendedorDir = normalizarTexto(c[COLS.clientes.idVendedor]);
+        
         const pertenece = (idVendedorFiltro === 'GLOBAL') ? true : (vendedorDir === idVendedorFiltro);
         const noTieneVentas = idCliente && !compradoresActivos.has(idCliente);
-        return pertenece && noTieneVentas;
+
+        if (pertenece && noTieneVentas) {
+            inactivosUnicos.set(idCliente, c); // Si el ID se repite en el Excel, simplemente se sobrescribe en la memoria, no se suma doble
+        }
     });
+
+    return Array.from(inactivosUnicos.values());
 }
 
 function cargarDataGeneral() {
@@ -395,17 +399,25 @@ function cargarDataGeneral() {
     const vtaT = db.ventas.reduce((s, v) => s + parseNum(v[COLS.ventas.total]), 0);
     const inactivosGlobales = obtenerInactivosReales('GLOBAL');
 
-    // Clientes Totales basados en el conteo estricto del directorio por ID
-    const clientesTotalesBase = db.clientes.length; 
+    // FILTRO ESTRICTO: Conteo único de clientes totales en la Base de Datos
+    const idsUnicosGlobales = new Set();
+    db.clientes.forEach(c => {
+        const idC = normalizarTexto(c[COLS.clientes.id]);
+        if(idC) idsUnicosGlobales.add(idC);
+    });
+    const clientesTotalesBase = idsUnicosGlobales.size; 
     
-    // VIP basado en ID_CLIENTE
+    // VIP basado ESTRICTAMENTE en ID_CLIENTE
     const vtasPorIdCli = {};
     db.ventas.forEach(v => {
         const idC = normalizarTexto(v[COLS.ventas.idCliente]);
         if(idC) vtasPorIdCli[idC] = (vtasPorIdCli[idC] || 0) + parseNum(v[COLS.ventas.total]);
     });
+    
     let clientesVipMas1000 = 0;
-    for(let idC in vtasPorIdCli) { if(vtasPorIdCli[idC] >= 1000) clientesVipMas1000++; }
+    for(let idC in vtasPorIdCli) { 
+        if(vtasPorIdCli[idC] >= 1000) clientesVipMas1000++; 
+    }
 
     document.getElementById('kpiGeneral').innerHTML = `
         <div class="kpi-box destacado"><h4>Venta Global Lograda</h4><span>${formatearMoneda(vtaT)}</span></div>
@@ -485,12 +497,20 @@ function cargarDataVendedor(vdData) {
     const inactivosCartera = obtenerInactivosReales(idV);
 
     const totV = ventasVendedor.reduce((s, v) => s + parseNum(v[COLS.ventas.total]), 0);
-    const activosCount = Math.max(0, clientesVendedor.length - inactivosCartera.length);
+    
+    // FILTRO ESTRICTO: Conteo único de clientes del vendedor
+    const idsUnicosVendedor = new Set();
+    clientesVendedor.forEach(c => {
+        const idC = normalizarTexto(c[COLS.clientes.id]);
+        if(idC) idsUnicosVendedor.add(idC);
+    });
+    const totalCarteraVendedor = idsUnicosVendedor.size;
+    const activosCount = Math.max(0, totalCarteraVendedor - inactivosCartera.length);
 
     document.getElementById('kpiVendedor').innerHTML = `
         <div class="kpi-box destacado"><h4>Cuota Lograda</h4><span>${formatearMoneda(totV)}</span></div>
         <div class="kpi-box"><h4>Meta Asignada</h4><span style="color:#333">${formatearMoneda(meta)}</span></div>
-        <div class="kpi-box" style="border-left: 4px solid #1a73e8;"><h4>Clientes Totales (Cartera)</h4><span style="color:#1a73e8">${clientesVendedor.length}</span></div>
+        <div class="kpi-box" style="border-left: 4px solid #1a73e8;"><h4>Clientes Totales (Cartera)</h4><span style="color:#1a73e8">${totalCarteraVendedor}</span></div>
         <div class="kpi-box kpi-clickable" style="border-left: 4px solid #ea4335;" onclick="mostrarModalInactivos('${idV}', '${nombreVendedor}')">
             <h4>Clientes Inactivos</h4><span style="color:#d93025">${inactivosCartera.length}</span>
         </div>
@@ -510,7 +530,6 @@ function cargarDataVendedor(vdData) {
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
     });
 
-    // TOP 7 Basado en ID_CLIENTE
     const cliVtasDir = {};
     ventasVendedor.forEach(v => {
         const idC = normalizarTexto(v[COLS.ventas.idCliente]);
@@ -568,7 +587,10 @@ function cargarDataVendedor(vdData) {
 
     renderTable('tablaProdUnid', cU);
     renderTable('tablaProdCaja', cC);
-    inyectarMapaNacional('ContenedorMapaVendedor', clientesVendedor);
+    
+    // Obtenemos los clientes únicos para pintarlos en el mapa sin sobrecargar pines iguales
+    const arrayUnicoMapaVend = Array.from(new Map(clientesVendedor.map(c => [normalizarTexto(c[COLS.clientes.id]), c])).values());
+    inyectarMapaNacional('ContenedorMapaVendedor', arrayUnicoMapaVend);
 }
 
 function cargarDataSituacion() {
@@ -615,23 +637,25 @@ function cargarDataSituacion() {
     });
     tb.appendChild(frag);
 
-    const clientesActivosSegmento = db.clientes.filter(c => {
+    const mapActivosSegmento = new Map();
+    db.clientes.forEach(c => {
         const idC = normalizarTexto(c[COLS.clientes.id]);
-        return idC && cache.ventasPorIdCliente[idC];
+        if(idC && cache.ventasPorIdCliente[idC]) {
+            mapActivosSegmento.set(idC, c); // Aseguramos no enviar pines duplicados
+        }
     });
 
-    inyectarMapaNacional('ContenedorMapaSituacion', clientesActivosSegmento.length ? clientesActivosSegmento : db.clientes);
+    inyectarMapaNacional('ContenedorMapaSituacion', mapActivosSegmento.size ? Array.from(mapActivosSegmento.values()) : db.clientes);
 }
 
-// BÚSQUEDA AUTOCORREGIDA (Muestra visualmente RUC/Razón, pero envía el ID_CLIENTE al detalle)
 function buscarAutocompleteCliente(texto) {
     const ul = document.getElementById('listaSugerenciasClientes');
     texto = normalizarTexto(texto);
     
     if (texto.length < 2) { ul.style.display = 'none'; return; }
     
-    let limit = 0;
-    let html = '';
+    // Evitar sugerencias duplicadas en visualización usando un Map
+    const resultadosUnicos = new Map();
     
     for(let i = 0; i < db.clientes.length; i++) {
         const c = db.clientes[i];
@@ -642,16 +666,20 @@ function buscarAutocompleteCliente(texto) {
         const r = c[COLS.clientes.razon] || '';
         
         const searchStr = normalizarTexto(d + " " + r);
-        if(searchStr.includes(texto)) {
-            const rSafe = r.replace(/'/g, "\\'");
-            html += `<li onclick="seleccionarSugerencia('${idC}', '${d}', '${rSafe}')">
-                <strong>${r || 'Sin Razón Social'}</strong>
-                <small>Documento: ${d}</small>
-            </li>`;
-            limit++;
-            if(limit >= 15) break;
+        if(searchStr.includes(texto) && !resultadosUnicos.has(idC)) {
+            resultadosUnicos.set(idC, { doc: d, razon: r });
+            if(resultadosUnicos.size >= 15) break;
         }
     }
+    
+    let html = '';
+    resultadosUnicos.forEach((datos, idC) => {
+        const rSafe = datos.razon.replace(/'/g, "\\'");
+        html += `<li onclick="seleccionarSugerencia('${idC}', '${datos.doc}', '${rSafe}')">
+            <strong>${datos.razon || 'Sin Razón Social'}</strong>
+            <small>Documento: ${datos.doc}</small>
+        </li>`;
+    });
     
     if(html === '') html = '<li style="color:#999; text-align:center; cursor:default;">No se encontraron resultados</li>';
     ul.innerHTML = html;
@@ -672,7 +700,6 @@ function mostrarDetalleCliente(idC, doc, razon) {
     document.getElementById('detalleNombreCliente').textContent = razon || 'Cliente Innominado';
     document.getElementById('detalleDocCliente').textContent = doc || idC;
 
-    // AHORA FILTRAMOS ESTRICTAMENTE POR ID_CLIENTE
     const susVtas = cache.ventasPorIdCliente[idC] || [];
 
     const totalFacturado = susVtas.reduce((s, v) => s + parseNum(v[COLS.ventas.total]), 0);
@@ -703,8 +730,8 @@ function mostrarDetalleCliente(idC, doc, razon) {
     db.productos.filter(p => {
         const pIdC = normalizarTexto(p[COLS.productos.idCliente]);
         const pDoc = normalizarTexto(p[COLS.productos.documento]);
-        if(pIdC && idC) return pIdC === idC; // Si hay ID en productos, manda el ID
-        if(pDoc && doc) return pDoc === doc; // Si no, busca por Documento por si acaso
+        if(pIdC && idC) return pIdC === idC; 
+        if(pDoc && doc) return pDoc === doc; 
         return false;
     }).forEach(p => {
         const n = p[COLS.productos.producto];
