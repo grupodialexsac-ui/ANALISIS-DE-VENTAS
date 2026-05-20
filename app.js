@@ -73,6 +73,9 @@ async function inicializarApp() {
         cargarVistaGlobal(document.getElementById('tabGlobal'));
         prepararBuscador();
         
+        // Inicialización de la optimización de vistas en dispositivos móviles
+        sincronizarControlesMoviles();
+        
         document.getElementById('loadingScreen').style.display = 'none';
         document.getElementById('appContainer').style.visibility = 'visible';
     } catch (error) { 
@@ -360,24 +363,18 @@ function cerrarModalInactivos() { document.getElementById('modalInactivos').styl
 function poblarTablaHTML(tableId, dataObj, esMoneda) {
     const tbody = document.querySelector(`#${tableId} tbody`); tbody.innerHTML = '';
     let items = Object.keys(dataObj).map(key => ({ label: key, valor: dataObj[key] })).sort((a,b) => b.valor - a.valor).slice(0, 5);
-    if(items.length === 0) { tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:#9aa0a6;">Sin registros</td></tr>`; return; }
+    if(items.length === 0) { tbody.innerHTML = `<tr><td colspan=\"2\" style=\"text-align:center; color:#9aa0a6;\">Sin registros</td></tr>`; return; }
     items.forEach(item => {
         let row = document.createElement('tr');
         let cellLabel = document.createElement('td'); cellLabel.textContent = item.label;
         let cellValor = document.createElement('td'); cellValor.className = 'num-col'; cellValor.textContent = esMoneda ? formatearMoneda(item.valor) : item.valor.toLocaleString();
         row.appendChild(cellLabel); row.appendChild(cellValor); tbody.appendChild(row);
     });
-    // =========================================================================
-// OPTIMIZACIONES DE EXPERIENCIA DE USUARIO (MÓVIL Y PC) - DIALEX BI
-// =========================================================================
+}
 
-// 1. Inyectamos la lógica de sincronización móvil justo después de poblar el Sidebar tradicional
-const originalPoblarSidebar = poblarSidebar;
-poblarSidebar = function() {
-    originalPoblarSidebar(); // Ejecuta tu función original primero sin alterarla
-    sincronizarControlesMoviles(); // Sincroniza el menú desplegable para celular
-};
-
+// ==========================================================================
+// CONTROL RESPONSIVO MÓVIL SINCRO (NATIVO - SIN ELEMENTOS DESTRUCTIVOS)
+// ==========================================================================
 function sincronizarControlesMoviles() {
     const selectMovil = document.getElementById('selectVendedoresMovil');
     const listaPC = document.getElementById('listaVendedores');
@@ -386,59 +383,40 @@ function sincronizarControlesMoviles() {
 
     if (!selectMovil || !listaPC) return;
 
-    // Limpiamos el select e insertamos la opción por defecto
+    // Reinicia y agrega la opción inicial por defecto
     selectMovil.innerHTML = '<option value="" disabled selected>📱 Seleccionar Vendedor...</option>';
 
-    // Clonamos dinámicamente los vendedores de tu lista de PC al select de celular
+    // Lee los elementos de la lista nativa de PC generados por poblarSidebar()
     const elementosLi = listaPC.querySelectorAll('li');
     elementosLi.forEach((li, index) => {
         let opt = document.createElement('option');
-        opt.value = index; // Guardamos el índice para saber a qué 'li' hacerle clic
+        opt.value = index; // Referencia al índice de la lista PC
         opt.textContent = li.textContent;
         selectMovil.appendChild(opt);
     });
 
-    // Evento al elegir un vendedor en el celular
+    // Escucha cambios del desplegable en el móvil y simula el clic nativo
     selectMovil.addEventListener('change', (e) => {
         const indexSeleccionado = e.target.value;
         if (elementosLi[indexSeleccionado]) {
-            elementosLi[indexSeleccionado].click(); // Simula el clic en tu arquitectura original
-            
-            // Si está en celular, colapsa el menú para que el usuario vea los gráficos inmediatamente
-            if (window.innerWidth <= 768 && sidebar) {
-                sidebar.classList.remove('menu-abierto');
-            }
+            elementosLi[indexSeleccionado].click(); // Dispara el onclick asignado originalmente
+            if (sidebar) sidebar.classList.remove('menu-abierto'); // Cierra pestañas secundarias
         }
     });
 
-    // Configuración del botón hamburguesa para pantallas pequeñas
+    // Control del botón hamburguesa para las secciones globales
     if (btnHamburguesa && sidebar) {
-        // Clonamos para evitar duplicidad de eventos si se inicializa dos veces
-        const nuevoBtn = btnHamburguesa.cloneNode(true);
-        btnHamburguesa.parentNode.replaceChild(nuevoBtn, btnHamburguesa);
-        
-        nuevoBtn.style.display = window.innerWidth <= 768 ? 'block' : 'none';
-        
-        nuevoBtn.addEventListener('click', (e) => {
+        btnHamburguesa.addEventListener('click', (e) => {
             e.stopPropagation();
             sidebar.classList.toggle('menu-abierto');
         });
 
-        // Cerrar menú al hacer clic en pestañas globales o de búsqueda en móvil
+        // Al cambiar de vistas principales, colapsa el menú automáticamente
         document.getElementById('tabGlobal').addEventListener('click', () => {
-            if (window.innerWidth <= 768) sidebar.classList.remove('menu-abierto');
+            if (sidebar) sidebar.classList.remove('menu-abierto');
         });
         document.getElementById('tabBusqueda').addEventListener('click', () => {
-            if (window.innerWidth <= 768) sidebar.classList.remove('menu-abierto');
+            if (sidebar) sidebar.classList.remove('menu-abierto');
         });
     }
-}
-
-// Escuchar cambios de tamaño de pantalla para ajustar la interfaz en tiempo real
-window.addEventListener('resize', () => {
-    const btnHamburguesa = document.getElementById('btnHamburguesa');
-    if (btnHamburguesa) {
-        btnHamburguesa.style.display = window.innerWidth <= 768 ? 'block' : 'none';
-    }
-});
 }
