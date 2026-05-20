@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Comercial - Dialex</title>
+    <title>Dashboard Dialex Profesional</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -11,64 +11,140 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
     <div id="loginScreen">
         <div class="login-box">
-            <h2>Acceso Privado</h2>
-            <input type="password" id="passInput" placeholder="Contraseña">
+            <h2>Acceso Dialex</h2>
+            <input type="password" id="passInput" placeholder="Contraseña" onkeypress="evaluarTeclado(event)">
             <button onclick="verificarPassword()">Ingresar</button>
+            <p id="loginError" class="error-msg">Contraseña incorrecta</p>
         </div>
+    </div>
+    
+    <div id="loadingScreen">
+        <div class="spinner" id="loadingSpinner"></div>
+        <p id="loadingTitle">Sincronizando...</p>
     </div>
 
     <div id="appContainer">
         <aside class="sidebar">
-            <div class="sidebar-header"><h3>SISTEMA DE ANÁLISIS</h3></div>
+            <div class="sidebar-header">
+                <h3>SISTEMA DIALEX</h3>
+            </div>
             <ul class="modulos-list" id="listaModulos">
-                <li onclick="cambiarModulo('productividad', this)">PRODUCTIVIDAD VENDEDORES</li>
-                <li class="active" onclick="cambiarModulo('general', this)">VISTA GENERAL</li>
-                <li onclick="cambiarModulo('situacion', this)">SITUACIÓN CLIENTES</li>
+                <li onclick="cambiarModulo('productividad', this)">PRODUCTIVIDAD</li>
+                <li class="active" onclick="cambiarModulo('general', this)">GENERAL</li>
+                <li onclick="cambiarModulo('situacion', this)">SITUACIÓN</li>
                 <li onclick="cambiarModulo('busqueda', this)">BÚSQUEDA</li>
             </ul>
         </aside>
 
         <main class="main-content">
-            <div id="selectorVendedorMobile" style="display: none; padding: 15px;">
-                <select id="vendedorDropdown" onchange="cargarDataVendedorPorDropdown(this.value)" style="width: 100%; padding: 12px; border-radius: 8px;">
-                    <option value="">Selecciona un Vendedor...</option>
-                </select>
+            <div id="menuVendedoresContainer" style="display: none;">
+                <ul class="vendedores-horizontal-list" id="listaVendedoresHorizontal"></ul>
             </div>
-
             <h1 class="header-title" id="tituloDashboard">Vista General</h1>
             
             <div id="vistaGeneral" class="modulo-view">
                 <div class="kpi-resumen" id="kpiGeneral"></div>
                 <div class="dashboard-grid">
-                    <div class="card"><h3 class="card-title">Avance Meta</h3><div class="chart-container"><canvas id="chartVelocimetroGeneral"></canvas><div class="speed-text" id="textoVelocimetroGeneral">0%</div></div></div>
-                    <div class="card"><h3 class="card-title">Canales</h3><div class="chart-container"><canvas id="chartDonaGeneral"></canvas></div></div>
-                    <div class="card full-width"><h3 class="card-title">Ventas x Días</h3><div class="chart-container"><canvas id="chartLineaGeneral"></canvas></div></div>
-                    <div class="card full-width"><h3 class="card-title">Ranking Metas</h3><div class="chart-container"><canvas id="chartRankingMeta"></canvas></div></div>
+                    <div class="card">
+                        <h3>Avance Meta</h3>
+                        <div class="chart-container"><canvas id="chartVelocimetroGeneral"></canvas><span id="textoVelocimetroGeneral" class="speedometer-text">0%</span></div>
+                    </div>
+                    <div class="card">
+                        <h3>Canales</h3>
+                        <div class="chart-container"><canvas id="chartDonaGeneral"></canvas></div>
+                    </div>
+                    <div class="card full-width">
+                        <h3>Ventas x Días</h3>
+                        <div class="chart-container"><canvas id="chartLineaGeneral"></canvas></div>
+                    </div>
+                    <div class="card full-width">
+                        <h3>Ranking Vendedores</h3>
+                        <div class="chart-container"><canvas id="chartRankingMeta"></canvas></div>
+                    </div>
+                    <div class="card full-width">
+                        <h3>Cobertura Nacional</h3>
+                        <div id="ContenedorMapaGeneral" class="mapa-contenedor"></div>
+                    </div>
                 </div>
             </div>
 
             <div id="vistaProductividad" class="modulo-view" style="display: none;">
-                <div class="kpi-resumen" id="kpiVendedor"></div>
+                <div id="kpiVendedor" class="kpi-resumen"></div>
                 <div class="dashboard-grid">
-                    <div class="card"><h3 class="card-title">Avance Meta</h3><div class="chart-container"><canvas id="chartVelocimetroVendedor"></canvas><div class="speed-text" id="textoVelocimetroVendedor">0%</div></div></div>
-                    <div class="card"><h3 class="card-title">Logrado vs Faltante</h3><div class="chart-container"><canvas id="chartDonaVendedor"></canvas></div></div>
-                    <div class="card"><h3 class="card-title">Top Productos</h3><div class="table-wrapper"><table id="tablaProdUnid"><thead><tr><th>Prod</th><th>Unid</th></tr></thead><tbody></tbody></table></div></div>
-                    <div class="card full-width"><h3 class="card-title">Mapa Ruta</h3><div id="ContenedorMapaVendedor" class="mapa-contenedor"></div></div>
+                    <div class="card">
+                        <h3>Avance Meta</h3>
+                        <div class="chart-container"><canvas id="chartVelocimetroVendedor"></canvas><span id="textoVelocimetroVendedor" class="speedometer-text">0%</span></div>
+                    </div>
+                    <div class="card">
+                        <h3>Logrado vs Faltante</h3>
+                        <div class="chart-container"><canvas id="chartDonaVendedor"></canvas></div>
+                    </div>
+                    <div class="card">
+                        <h3>Top Prod. (Unidades)</h3>
+                        <div class="table-wrapper"><table id="tablaProdUnid"><thead><tr><th>Prod</th><th>Unidades</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="card">
+                        <h3>Top Prod. (Cajas)</h3>
+                        <div class="table-wrapper"><table id="tablaProdCaja"><thead><tr><th>Prod</th><th>Cajas</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="card full-width">
+                        <h3>Mapa Vendedor</h3>
+                        <div id="ContenedorMapaVendedor" class="mapa-contenedor"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="vistaSituacion" class="modulo-view" style="display: none;">
+                <div class="kpi-resumen" id="kpiSituacion">
+                    <div class="kpi-box"><h4>Ticket Promedio</h4><span id="kpiTicketPromedio">S/ 0.00</span></div>
+                    <div class="kpi-box"><h4>Frecuencia</h4><span id="kpiFrecuencia">0</span></div>
+                    <div class="kpi-box"><h4>Riesgo</h4><span id="kpiRiesgo">0</span></div>
+                </div>
+                <div class="dashboard-grid">
+                    <div class="card full-width">
+                        <h3>Segmentación ABC</h3>
+                        <div class="table-wrapper"><table id="tablaABC"><thead><tr><th>Cliente</th><th>Seg</th><th>Total</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="card full-width">
+                        <h3>Mapa Situación</h3>
+                        <div id="ContenedorMapaSituacion" class="mapa-contenedor"></div>
+                    </div>
                 </div>
             </div>
 
             <div id="vistaBusqueda" class="modulo-view" style="display: none;">
-                <input type="text" id="inputBusqueda" placeholder="Buscar cliente..." onkeyup="filtrarDirectorio()" style="width:100%; padding:15px; margin-bottom:20px; border-radius:8px;">
+                <input type="text" id="inputBusquedaCliente" placeholder="Buscar por Nombre o RUC..." onkeyup="filtrarDirectorioClientes()" style="width:100%; padding:10px; margin-bottom:10px; border: 1px solid #ccc; border-radius: 4px;">
                 <div class="split-layout">
-                    <div class="card split-left"><div class="table-wrapper"><table id="tablaDir"><thead><tr><th>Doc</th><th>Razon</th></tr></thead><tbody></tbody></table></div></div>
-                    <div class="card split-right" id="panelDetalle" style="display:none;"></div>
+                    <div class="card split-left">
+                        <div class="table-wrapper"><table id="tablaDirectorioClientes"><thead><tr><th>Doc</th><th>Razon</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="card split-right" id="panelDetalleCliente" style="display:none;">
+                        <div style="margin-bottom: 20px;">
+                            <h3 id="detalleNombreCliente" style="margin: 0 0 10px 0; color: #1a73e8;"></h3>
+                            <p style="margin: 5px 0; font-size: 0.9rem;"><strong>Documento:</strong> <span id="detalleDocCliente"></span></p>
+                            <p style="margin: 5px 0; font-size: 0.9rem;"><strong>Total Histórico:</strong> <span id="detalleTotalVenta"></span></p>
+                            <div id="detalleEstadoCli" style="margin-top: 10px;"></div>
+                        </div>
+                        <div class="chart-container" style="height: 200px; margin-bottom: 20px;"><canvas id="chartClienteHistorial"></canvas></div>
+                        <div class="table-wrapper"><table id="tablaClienteProductos"><thead><tr><th>Producto</th><th>Cant</th></tr></thead><tbody></tbody></table></div>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
+
+    <div id="modalInactivos" class="modal-overlay">
+        <div class="modal-content">
+            <span class="modal-close" onclick="cerrarModalInactivos()">&times;</span>
+            <h3 style="margin-top:0;">Directorio de Clientes</h3>
+            <div class="table-wrapper">
+                <table id="tablaInactivos"><thead><tr><th>Doc</th><th>Razón Social</th><th>Estado</th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
