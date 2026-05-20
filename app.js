@@ -984,24 +984,4 @@ function mostrarModalInactivos(idVendedor, nombreVendedor) {
 function cerrarModalInactivos() {
     document.getElementById('modalInactivos').style.display = 'none';
 }
-    window.addEventListener('resize', () => {
 
-    clearTimeout(window.__resizeDialex);
-
-    window.__resizeDialex = setTimeout(() => {
-
-        Object.values(charts).forEach(chart => {
-            try {
-                chart.resize();
-            } catch(e) {}
-        });
-
-        Object.values(mapasInstancias).forEach(m => {
-            try {
-                m.instance.invalidateSize();
-            } catch(e) {}
-        });
-
-    }, 200);
-
-});
