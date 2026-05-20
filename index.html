@@ -96,7 +96,7 @@
                             </div>
                         </div>
                         <div class="card">
-                            <h3>Distribución Logrado vs Faltante</h3>
+                            <h3>Estado de Cartera (Activos vs Inactivos)</h3>
                             <div class="chart-container">
                                 <canvas id="chartDonaVendedor"></canvas>
                             </div>
@@ -105,9 +105,7 @@
                             <h3>Productos Top (Unidades)</h3>
                             <div class="table-wrapper">
                                 <table id="tablaProdUnid">
-                                    <thead>
-                                        <tr><th>Producto</th><th class="num-col">Unidades</th></tr>
-                                    </thead>
+                                    <thead><tr><th>Producto</th><th class="num-col">Unidades</th></tr></thead>
                                     <tbody></tbody>
                                 </table>
                             </div>
@@ -116,9 +114,7 @@
                             <h3>Productos Top (Cajas)</h3>
                             <div class="table-wrapper">
                                 <table id="tablaProdCaja">
-                                    <thead>
-                                        <tr><th>Producto</th><th class="num-col">Cajas</th></tr>
-                                    </thead>
+                                    <thead><tr><th>Producto</th><th class="num-col">Cajas</th></tr></thead>
                                     <tbody></tbody>
                                 </table>
                             </div>
@@ -133,27 +129,16 @@
 
             <div id="vistaSituacion" class="modulo-view" style="display: none;">
                 <div class="kpi-resumen">
-                    <div class="kpi-box">
-                        <h4>Ticket Promedio</h4>
-                        <span id="kpiTicketPromedio">S/ 0.00</span>
-                    </div>
-                    <div class="kpi-box">
-                        <h4>Frecuencia Compra</h4>
-                        <span id="kpiFrecuencia">0.0</span>
-                    </div>
-                    <div class="kpi-box">
-                        <h4>Clientes Sin Venta (Riesgo)</h4>
-                        <span id="kpiRiesgo" style="color: #d93025;">0</span>
-                    </div>
+                    <div class="kpi-box"><h4>Ticket Promedio</h4><span id="kpiTicketPromedio">S/ 0.00</span></div>
+                    <div class="kpi-box"><h4>Frecuencia Compra</h4><span id="kpiFrecuencia">0.0</span></div>
+                    <div class="kpi-box"><h4>Clientes Sin Venta (Riesgo)</h4><span id="kpiRiesgo" style="color: #d93025;">0</span></div>
                 </div>
                 <div class="dashboard-grid">
                     <div class="card full-width">
                         <h3>Segmentación ABC Dinámica de Clientes (Pareto 80/20)</h3>
                         <div class="table-wrapper">
                             <table id="tablaABC">
-                                <thead>
-                                    <tr><th>Cliente Comprador</th><th>Segmento</th><th class="num-col">Total Facturado</th></tr>
-                                </thead>
+                                <thead><tr><th>Cliente Comprador</th><th>Segmento</th><th class="num-col">Total Facturado</th></tr></thead>
                                 <tbody></tbody>
                             </table>
                         </div>
@@ -172,9 +157,7 @@
                         <h3>Directorio Base</h3>
                         <div class="table-wrapper">
                             <table id="tablaDirectorioClientes">
-                                <thead>
-                                    <tr><th>Documento</th><th>Razón Social / Nombre</th></tr>
-                                </thead>
+                                <thead><tr><th>Documento</th><th>Razón Social / Nombre</th></tr></thead>
                                 <tbody></tbody>
                             </table>
                         </div>
@@ -184,27 +167,17 @@
                         <p style="margin:0 0 15px 0; font-size:0.9rem; color:#666;">Documento: <strong id="detalleDocCliente">---</strong></p>
                         
                         <div class="kpi-resumen">
-                            <div class="kpi-box">
-                                <h4>Total Comprado</h4>
-                                <span id="detalleTotalVenta" style="font-size:1.1rem;">S/ 0.00</span>
-                            </div>
-                            <div class="kpi-box">
-                                <h4>Estado Comercial</h4>
-                                <div id="detalleEstadoCli" style="margin-top:5px;"></div>
-                            </div>
+                            <div class="kpi-box"><h4>Total Comprado</h4><span id="detalleTotalVenta" style="font-size:1.1rem;">S/ 0.00</span></div>
+                            <div class="kpi-box"><h4>Estado Comercial</h4><div id="detalleEstadoCli" style="margin-top:5px;"></div></div>
                         </div>
 
                         <h4 style="color:#5f6368; font-size:0.8rem; text-transform:uppercase; margin-top:10px;">Historial Dinámico de Compras</h4>
-                        <div class="chart-container" style="height:180px; margin-bottom:20px;">
-                            <canvas id="chartClienteHistorial"></canvas>
-                        </div>
+                        <div class="chart-container" style="height:180px; margin-bottom:20px;"><canvas id="chartClienteHistorial"></canvas></div>
 
                         <h4 style="color:#5f6368; font-size:0.8rem; text-transform:uppercase;">Mix de Productos Comprados</h4>
                         <div class="table-wrapper">
                             <table id="tablaClienteProductos">
-                                <thead>
-                                    <tr><th>Producto</th><th class="num-col">Volumen Total</th></tr>
-                                </thead>
+                                <thead><tr><th>Producto</th><th class="num-col">Volumen Total</th></tr></thead>
                                 <tbody></tbody>
                             </table>
                         </div>
@@ -221,9 +194,7 @@
             <p style="font-size:0.85rem; color:#666; margin-bottom:15px;">Lista de clientes del portafolio que registran cero transacciones según los filtros aplicados.</p>
             <div class="table-wrapper" style="flex:1; overflow-y:auto;">
                 <table id="tablaInactivos">
-                    <thead>
-                        <tr><th>Documento</th><th>Razón Social</th><th>Estado Asignado</th></tr>
-                    </thead>
+                    <thead><tr><th>Documento</th><th>Razón Social</th><th>Estado Asignado</th></tr></thead>
                     <tbody></tbody>
                 </table>
             </div>
