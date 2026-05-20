@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Comercial - Dialex</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="styles.css">
@@ -24,23 +24,11 @@
         <p>Descargando y procesando datos en tiempo real</p>
     </div>
 
-    <div id="menuPrincipalScreen" style="display: none;">
-        <div class="menu-principal-box">
-            <h1 class="menu-title">Menú Principal</h1>
-            <div class="menu-grid">
-                <button class="menu-btn" onclick="abrirVistaGlobalDesdeMenu()">Vista General de Ventas</button>
-                <button class="menu-btn" onclick="abrirVistaVendedoresDesdeMenu()">Análisis de Rendimiento de Vendedores</button>
-                <button class="menu-btn" onclick="abrirVistaBusquedaDesdeMenu()">Búsqueda Clientes</button>
-                <button class="menu-btn" onclick="alert('Módulo de Cobertura Geográfica en proceso de desarrollo.')">Mapa de Cobertura de Dialex</button>
-            </div>
-        </div>
-    </div>
-
     <div id="modalInactivos" class="modal-overlay">
         <div class="modal-content">
             <span class="modal-close" onclick="cerrarModalInactivos()">&times;</span>
             <h3 style="color:#ea4335; margin-top:0;">Lista de Clientes Inactivos</h3>
-            <p style="font-size: 0.9rem; color:#5f6368; margin-bottom: 15px;">Contactos asignados sin transacciones registradas en el periodo actual.</p>
+            <p style="font-size: 0.9rem; color:#5f6368;">Se requiere plan de recuperación para estos contactos.</p>
             <div class="table-wrapper">
                 <table id="tablaInactivos">
                     <thead><tr><th>DNI / RUC</th><th>Razón Social</th></tr></thead>
@@ -50,12 +38,11 @@
         </div>
     </div>
 
-    <div id="appContainer" style="display: none;">
+    <div id="appContainer">
         
         <aside class="sidebar">
-            <div class="sidebar-header" style="background-color: #0f52ba;">Navegación</div>
+            <div class="sidebar-header" style="background-color: #0f52ba;">MENÚ PRINCIPAL</div>
             <ul class="vendedores-list" style="flex: none; border-bottom: 2px solid #e8eaed;">
-                <li class="btn-home-menu" onclick="mostrarMenuPrincipal()">🏠 VOLVER AL MENÚ</li>
                 <li id="tabGlobal" class="active" onclick="abrirVistaGlobal()">📊 VISTA GENERAL</li>
                 <li id="tabBusqueda" onclick="abrirVistaBusqueda()">🔍 BÚSQUEDA CLIENTES</li>
             </ul>
@@ -76,45 +63,39 @@
                 <div class="kpi-resumen" id="contenedorKPIs"></div>
 
                 <div class="dashboard-grid">
-                    <div class="card card-circular">
+                    <div class="card">
                         <h3>Avance de la Meta</h3>
-                        <div class="chart-container container-circular">
+                        <div class="chart-container" style="max-width: 260px;">
                             <canvas id="chartVelocimetro"></canvas>
                             <div class="speedometer-text" id="textoVelocimetro">0%</div>
                         </div>
                     </div>
-                    
-                    <div class="card card-circular">
+                    <div class="card">
                         <h3 id="tituloGraficoDona">Distribución</h3>
-                        <div class="chart-container container-circular">
+                        <div class="chart-container" style="max-width: 240px;">
                             <canvas id="chartDona"></canvas>
                         </div>
                     </div>
-                    
-                    <div class="card full-width">
+                    <div class="card full-width" id="cardGlobalLinea">
                         <h3>Comportamiento de Ventas x Días</h3>
                         <div class="chart-container responsive-chart">
                             <canvas id="chartLinea"></canvas>
                         </div>
                     </div>
-                    
-                    <div class="card full-width">
+                    <div class="card full-width" id="cardGlobalRankingMeta">
                         <h3>Ranking x % de Meta Cumplida (Proyección al 100%)</h3>
-                        <div class="chart-container responsive-chart-bar">
+                        <div class="chart-container responsive-chart" style="padding-top: 15px;">
                             <canvas id="chartRankingMeta"></canvas>
                         </div>
                     </div>
-                    
                     <div class="card" id="cardVendedorProdUnid" style="display:none;">
                         <h3>Ranking Productos x Unidad</h3>
                         <div class="table-wrapper"><table id="tablaProdUnid"><thead><tr><th>Producto</th><th class="num-col">Unidades</th></tr></thead><tbody></tbody></table></div>
                     </div>
-                    
                     <div class="card" id="cardVendedorProdCaja" style="display:none;">
                         <h3>Ranking Productos x Caja</h3>
                         <div class="table-wrapper"><table id="tablaProdCaja"><thead><tr><th>Producto</th><th class="num-col">Cajas</th></tr></thead><tbody></tbody></table></div>
                     </div>
-                    
                     <div class="card full-width" id="cardVendedorClientes" style="display:none;">
                         <h3>Ranking de Clientes del Vendedor</h3>
                         <div class="table-wrapper"><table id="tablaClientesVend"><thead><tr><th>Razón Social</th><th class="num-col">Total Facturado (S/)</th></tr></thead><tbody></tbody></table></div>
@@ -131,7 +112,8 @@
                     <button class="search-btn" onclick="ejecutarBusquedaCliente()">🔍 Analizar Cliente</button>
                 </div>
 
-                <div class="kpi-resumen" id="kpiBusqueda"></div>
+                <div class="kpi-resumen" id="kpiBusqueda">
+                    </div>
 
                 <div class="dashboard-grid" id="gridResultadosCliente" style="display:none;">
                     <div class="card full-width">
