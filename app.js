@@ -284,47 +284,78 @@ async function inicializarApp() {
 }
 
 function cambiarModulo(modulo, elemento) {
+
+    if (moduloActual === modulo) return;
+
     moduloActual = modulo;
 
-    document.querySelectorAll('.modulos-list li').forEach(el => el.classList.remove('active'));
-    if (elemento) elemento.classList.add('active');
+    requestAnimationFrame(() => {
 
-    document.querySelectorAll('.modulo-view').forEach(el => el.style.display = 'none');
-    document.getElementById('menuVendedoresContainer').style.display = 'none';
+        document.querySelectorAll('.modulos-list li').forEach(el => {
+            el.classList.remove('active');
+        });
 
-    if (modulo === 'general') {
-        document.getElementById('vistaGeneral').style.display = 'block';
-        document.getElementById('tituloDashboard').textContent = 'Vista General Comercial';
-        cargarDataGeneral();
-    } else if (modulo === 'productividad') {
-        document.getElementById('vistaProductividad').style.display = 'block';
-        document.getElementById('menuVendedoresContainer').style.display = 'flex';
-        document.getElementById('tituloDashboard').textContent = 'Análisis de Productividad';
+        if (elemento) elemento.classList.add('active');
 
-        const actLi = document.querySelector('#listaVendedoresHorizontal li.active');
-        if (!actLi) {
-            const primerV = document.querySelector('#listaVendedoresHorizontal li');
-            if (primerV) primerV.click();
-        } else if (vendedorSeleccionadoActivo) {
-            cargarDataVendedor(vendedorSeleccionadoActivo);
+        document.querySelectorAll('.modulo-view').forEach(v => {
+            v.style.display = 'none';
+        });
+
+        document.getElementById('menuVendedoresContainer').style.display = 'none';
+
+        const vistas = {
+            general: document.getElementById('vistaGeneral'),
+            productividad: document.getElementById('vistaProductividad'),
+            situacion: document.getElementById('vistaSituacion'),
+            busqueda: document.getElementById('vistaBusqueda')
+        };
+
+        vistas[modulo].style.display = 'block';
+
+        if (modulo === 'general') {
+            document.getElementById('tituloDashboard').textContent = 'Vista General Comercial';
+            setTimeout(cargarDataGeneral, 10);
         }
-    } else if (modulo === 'situacion') {
-        document.getElementById('vistaSituacion').style.display = 'block';
-        document.getElementById('tituloDashboard').textContent = 'Estrategia de Rentabilidad';
-        cargarDataSituacion();
-    } else if (modulo === 'busqueda') {
-        document.getElementById('vistaBusqueda').style.display = 'block';
-        document.getElementById('tituloDashboard').textContent = 'Directorio Analítico';
-        llenarTablaDirectorio();
-    }
 
-    setTimeout(() => {
-        if (modulo === 'general') refrescarMapaVisible('ContenedorMapaGeneral');
-        if (modulo === 'productividad') refrescarMapaVisible('ContenedorMapaVendedor');
-        if (modulo === 'situacion') refrescarMapaVisible('ContenedorMapaSituacion');
-    }, 80);
+        if (modulo === 'productividad') {
+
+            document.getElementById('menuVendedoresContainer').style.display = 'flex';
+            document.getElementById('tituloDashboard').textContent = 'Análisis de Productividad';
+
+            setTimeout(() => {
+                let actLi = document.querySelector('#listaVendedoresHorizontal li.active');
+
+                if (!actLi) {
+                    let pV = document.querySelector('#listaVendedoresHorizontal li');
+                    if (pV) pV.click();
+                } else {
+                    if (vendedorSeleccionadoActivo) {
+                        cargarDataVendedor(vendedorSeleccionadoActivo);
+                    }
+                }
+            }, 10);
+        }
+
+        if (modulo === 'situacion') {
+            document.getElementById('tituloDashboard').textContent = 'Estrategia de Rentabilidad';
+            setTimeout(cargarDataSituacion, 10);
+        }
+
+        if (modulo === 'busqueda') {
+            document.getElementById('tituloDashboard').textContent = 'Directorio Analítico';
+            setTimeout(llenarTablaDirectorio, 10);
+        }
+
+        setTimeout(() => {
+            Object.values(mapasInstancias).forEach(m => {
+                if (m?.instance) {
+                    m.instance.invalidateSize();
+                }
+            });
+        }, 100);
+
+    });
 }
-
 function generarMenuVendedores() {
     const lista = document.getElementById('listaVendedoresHorizontal');
     lista.innerHTML = '';
@@ -425,13 +456,21 @@ function inyectarMapaNacional(idContenedorPadre, arrayCliData) {
         mapaObj.layerGroup.addLayer(marker);
     });
 
-    if (arrayCliData.length > 0) {
-        try {
-            mapaObj.instance.fitBounds(mapaObj.layerGroup.getBounds(), { padding: [30, 30], maxZoom: 11 });
-        } catch (e) {
-            mapaObj.instance.setView([-9.1899, -75.0151], 5);
-        }
-    }
+    if(arrayCliData.length > 0 && mapaObj.layerGroup.getLayers().length > 2) {
+
+    clearTimeout(mapaObj.fitTimeout);
+
+    mapaObj.fitTimeout = setTimeout(() => {
+
+        mapaObj.instance.fitBounds(
+            mapaObj.layerGroup.getBounds(),
+            {
+                padding:[20,20],
+                maxZoom:10
+            }
+        );
+
+    }, 120);
 }
 
 function obtenerInactivosReales(idVendedorFiltro) {
@@ -781,31 +820,36 @@ function cargarDataSituacion() {
     );
 }
 
+let directorioRenderizado = false;
+
 function llenarTablaDirectorio() {
+
+    if (directorioRenderizado) return;
+
+    directorioRenderizado = true;
+
     const tb = document.querySelector('#tablaDirectorioClientes tbody');
-    tb.innerHTML = '';
 
-    const docC = COLS.clientes.documento;
-    const razC = COLS.clientes.razon;
+    let html = '';
 
-    const frag = document.createDocumentFragment();
+    let docC = getColExacto(db.clientes[0], ['Documento_Numero', 'RUC', 'DNI']);
+    let razC = getColExacto(db.clientes[0], ['RAZÓN SOCIAL', 'NOMBRE']);
 
     db.clientes.forEach(c => {
-        const d = c[docC] || '';
-        const r = c[razC] || '';
 
-        if (d || r) {
-            const tr = document.createElement('tr');
-            tr.className = 'fila-cliente';
-            tr.innerHTML = `<td>${d}</td><td>${r}</td>`;
-            tr.onclick = () => mostrarDetalleCliente(d, r, tr);
-            frag.appendChild(tr);
-        }
+        let d = c[docC] || '';
+        let r = c[razC] || '';
+
+        html += `
+            <tr class="fila-cliente" onclick="mostrarDetalleCliente('${d}','${r.replace(/'/g, "")}', this)">
+                <td>${d}</td>
+                <td>${r}</td>
+            </tr>
+        `;
     });
 
-    tb.appendChild(frag);
+    tb.innerHTML = html;
 }
-
 function filtrarDirectorioClientes() {
     const input = normalizarTexto(document.getElementById('inputBusquedaCliente').value);
     document.querySelectorAll('#tablaDirectorioClientes .fila-cliente').forEach(f => {
