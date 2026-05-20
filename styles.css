@@ -6,9 +6,11 @@ html, body {
     font-family: 'Segoe UI', -apple-system, Arial, sans-serif;
     background-color: #f1f3f4;
     color: #202124;
-    height: 100vh;
-    display: flex;
-    overflow: hidden;
+    height: 100%;
+    width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* PANTALLAS DE CONTROL DE ACCESO */
@@ -108,10 +110,11 @@ html, body {
 
 #appContainer {
     display: flex;
-    height: 100vh;
-    width: 100vw;
+    min-height: 100vh;
+    width: 100%;
     visibility: hidden;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 /* BARRA LATERAL (SIDEBAR) */
@@ -173,8 +176,11 @@ html, body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     background-color: #f8f9fa;
+    min-height: 100vh;
+    -webkit-overflow-scrolling: touch;
 }
 .header-title {
     margin: 20px 25px 15px 25px;
@@ -577,5 +583,48 @@ tr:hover { background-color: #fdfdfd; }
 
     th, td {
         padding: 9px 10px;
+    }
+}
+.modulo-view {
+    will-change: opacity;
+}
+
+canvas {
+    max-width: 100% !important;
+}
+
+.chart-container {
+    min-height: 260px;
+}
+
+@media (max-width: 960px) {
+
+    body {
+        overflow-y: auto;
+    }
+
+    .main-content {
+        overflow-y: visible;
+    }
+
+    .modulo-view {
+        overflow: visible;
+    }
+
+    .card {
+        min-height: auto;
+        padding: 15px;
+    }
+
+    .mapa-contenedor {
+        height: 300px;
+    }
+
+    .kpi-box {
+        min-width: 100%;
+    }
+
+    .chart-container {
+        min-height: 220px;
     }
 }
