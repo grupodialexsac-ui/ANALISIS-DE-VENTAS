@@ -780,7 +780,7 @@ function mostrarModalInactivos(idVendedor, nombreVendedor) {
         });
         tb.appendChild(frag);
     }
-
+ }
     document.getElementById('modalInactivos').style.display = 'flex';
 }
 
