@@ -250,6 +250,7 @@ html, body {
     flex-direction: column;
     min-height: 280px;
     position: relative;
+    min-width: 0; /* <-- AGREGA ESTA LÍNEA: Fuerza a la tarjeta a encogerse al tamaño del celular */
 }
 .card.full-width {
     grid-column: span 2;
@@ -261,6 +262,7 @@ html, body {
     text-transform: uppercase;
     font-weight: 700;
     letter-spacing: 0.5px;
+    line-height: 1.4; /* <-- AGREGA ESTA LÍNEA: Mejora la lectura en pantallas pequeñas */
 }
 
 /* CONTENEDORES DE GRÁFICOS INTERNOS */
@@ -390,6 +392,7 @@ canvas {
     width: 100%;
     overflow-x: auto;
     scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch; /* <-- AGREGA ESTA LÍNEA: Activa el scroll suave nativo en móviles */
 }
 table {
     width: 100%;
