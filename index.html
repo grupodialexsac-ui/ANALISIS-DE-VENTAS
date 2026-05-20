@@ -88,6 +88,15 @@
                 <div id="contenidoProductividad" style="display: none;">
                     <div id="kpiVendedor" class="kpi-resumen"></div>
                     <div class="dashboard-grid">
+                        <div class="card full-width">
+                            <h3>Top 7 Mejores Clientes</h3>
+                            <div class="table-wrapper">
+                                <table id="tablaTopClientesVendedor">
+                                    <thead><tr><th>Cliente (Razón Social)</th><th class="num-col">Total Comprado</th></tr></thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
                         <div class="card">
                             <h3>Avance Meta Individual</h3>
                             <div class="chart-container">
@@ -102,15 +111,6 @@
                             </div>
                         </div>
                         <div class="card">
-                            <h3>Top 7 Mejores Clientes</h3>
-                            <div class="table-wrapper">
-                                <table id="tablaTop7Clientes">
-                                    <thead><tr><th>#</th><th>Cliente</th><th class="num-col">Total</th></tr></thead>
-                                    <tbody></tbody>
-                                </table>
-                            </div>
-                        </div>
-                        <div class="card">
                             <h3>Productos Top (Unidades)</h3>
                             <div class="table-wrapper">
                                 <table id="tablaProdUnid">
@@ -119,7 +119,7 @@
                                 </table>
                             </div>
                         </div>
-                        <div class="card full-width">
+                        <div class="card">
                             <h3>Productos Top (Cajas)</h3>
                             <div class="table-wrapper">
                                 <table id="tablaProdCaja">
@@ -147,7 +147,7 @@
                         <h3>Segmentación ABC Dinámica de Clientes (Pareto 80/20)</h3>
                         <div class="table-wrapper">
                             <table id="tablaABC">
-                                <thead><tr><th>Cliente Comprador</th><th>Segmento</th><th class="num-col">Total Facturado</th></tr></thead>
+                                <thead><tr><th>Cliente (Razón Comercial)</th><th>Segmento</th><th class="num-col">Total Facturado</th></tr></thead>
                                 <tbody></tbody>
                             </table>
                         </div>
@@ -160,24 +160,24 @@
             </div>
 
             <div id="vistaBusqueda" class="modulo-view" style="display: none;">
-                <div class="buscador-wrapper">
-                    <input type="text" id="inputBuscadorCliente" list="listaClientesSugeridos" placeholder="🔍 Escribe Razón Social o RUC y selecciona de la lista para buscar..." onchange="buscarYMostrarCliente()">
-                    <datalist id="listaClientesSugeridos"></datalist>
+                <div class="autocomplete-container">
+                    <input type="text" id="inputBusquedaCliente" placeholder="🔍 Escribe RUC, DNI o Razón Social para buscar..." autocomplete="off" oninput="buscarAutocompleteCliente(this.value)">
+                    <ul class="autocomplete-list" id="listaSugerenciasClientes"></ul>
                 </div>
-
-                <div class="card" id="panelDetalleCliente" style="display:none; border-top: 5px solid #1a73e8;">
-                    <h3 id="detalleNombreCliente" style="margin-top:0; color: #1a73e8; font-size: 1.4rem;">Seleccione un Cliente</h3>
-                    <p style="margin:0 0 15px 0; font-size:1rem; color:#666;">Documento: <strong id="detalleDocCliente">---</strong></p>
+                
+                <div class="card" id="panelDetalleCliente" style="display:none; width:100%;">
+                    <h3 id="detalleNombreCliente">Seleccione un Cliente</h3>
+                    <p style="margin:0 0 15px 0; font-size:0.9rem; color:#666;">Documento: <strong id="detalleDocCliente">---</strong></p>
                     
                     <div class="kpi-resumen">
-                        <div class="kpi-box"><h4>Total Comprado</h4><span id="detalleTotalVenta" style="font-size:1.3rem;">S/ 0.00</span></div>
+                        <div class="kpi-box"><h4>Total Comprado</h4><span id="detalleTotalVenta" style="font-size:1.1rem;">S/ 0.00</span></div>
                         <div class="kpi-box"><h4>Estado Comercial</h4><div id="detalleEstadoCli" style="margin-top:5px;"></div></div>
                     </div>
 
-                    <h4 style="color:#5f6368; font-size:0.85rem; text-transform:uppercase; margin-top:15px;">Historial Dinámico de Compras</h4>
-                    <div class="chart-container" style="height:220px; margin-bottom:20px;"><canvas id="chartClienteHistorial"></canvas></div>
+                    <h4 style="color:#5f6368; font-size:0.8rem; text-transform:uppercase; margin-top:10px;">Historial Dinámico de Compras</h4>
+                    <div class="chart-container" style="height:180px; margin-bottom:20px;"><canvas id="chartClienteHistorial"></canvas></div>
 
-                    <h4 style="color:#5f6368; font-size:0.85rem; text-transform:uppercase;">Mix de Productos Comprados</h4>
+                    <h4 style="color:#5f6368; font-size:0.8rem; text-transform:uppercase;">Mix de Productos Comprados</h4>
                     <div class="table-wrapper">
                         <table id="tablaClienteProductos">
                             <thead><tr><th>Producto</th><th class="num-col">Volumen Total</th></tr></thead>
