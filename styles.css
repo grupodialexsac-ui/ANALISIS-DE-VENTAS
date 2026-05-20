@@ -193,6 +193,7 @@ html, body {
     padding: 0 25px 25px 25px;
     overflow-y: auto;
     overflow-x: hidden;
+    will-change: opacity;
 }
 
 /* MENÚ HORIZONTAL DE VENDEDORES */
@@ -249,7 +250,7 @@ html, body {
     flex-direction: column;
     min-height: 280px;
     position: relative;
-    min-width: 0; /* Asegura el encogimiento adaptativo */
+    min-width: 0; /* <-- AGREGA ESTA LÍNEA: Fuerza a la tarjeta a encogerse al tamaño del celular */
 }
 .card.full-width {
     grid-column: span 2;
@@ -261,16 +262,7 @@ html, body {
     text-transform: uppercase;
     font-weight: 700;
     letter-spacing: 0.5px;
-    line-height: 1.4;
-}
-
-/* SCROLL HORIZONTAL PARA GRÁFICOS REPLEGADOS */
-.chart-scroll-x {
-    width: 100%;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    -webkit-overflow-scrolling: touch;
-    flex: 1;
+    line-height: 1.4; /* <-- AGREGA ESTA LÍNEA: Mejora la lectura en pantallas pequeñas */
 }
 
 /* CONTENEDORES DE GRÁFICOS INTERNOS */
@@ -283,9 +275,8 @@ html, body {
     justify-content: center;
     min-height: 260px;
 }
-.chart-container canvas {
-    max-width: 100%;
-    max-height: 100%;
+canvas {
+    max-width: 100% !important;
 }
 .speedometer-text {
     position: absolute;
@@ -401,7 +392,7 @@ html, body {
     width: 100%;
     overflow-x: auto;
     scrollbar-width: thin;
-    -webkit-overflow-scrolling: touch;
+    -webkit-overflow-scrolling: touch; /* <-- AGREGA ESTA LÍNEA: Activa el scroll suave nativo en móviles */
 }
 table {
     width: 100%;
@@ -505,22 +496,30 @@ tr:hover { background-color: #fdfdfd; }
    DISEÑO ADAPTATIVO MÓVIL ESTRICTO (RESPONSIVE)
    ========================================= */
 @media (max-width: 960px) {
-    html, body {
-        overflow-x: hidden;
-        overflow-y: auto;
+    
+    /* ... tus otros estilos de celular ... */
+
+    /* Fuerza el ancho de los gráficos para que se puedan deslizar */
+    .chart-scroll-x .responsive-chart {
+        min-width: 800px; 
     }
+}
+
     body, #appContainer {
         flex-direction: column;
         height: auto;
     }
+
     .sidebar {
         width: 100%;
         min-width: 100%;
         height: auto;
     }
+
     .sidebar-header {
         display: none;
     }
+
     .modulos-list {
         flex-direction: row;
         gap: 5px;
@@ -528,9 +527,11 @@ tr:hover { background-color: #fdfdfd; }
         overflow-x: auto;
         scrollbar-width: none;
     }
+
     .modulos-list::-webkit-scrollbar {
         display: none;
     }
+
     .modulos-list li {
         padding: 8px 14px;
         border-radius: 20px;
@@ -538,66 +539,75 @@ tr:hover { background-color: #fdfdfd; }
         white-space: nowrap;
         flex: 0 0 auto;
     }
+
     .main-content {
         min-height: 0;
         overflow-y: visible;
     }
+
     .dashboard-grid {
         grid-template-columns: 1fr;
     }
+
     .card.full-width {
         grid-column: span 1;
     }
+
     .card {
         min-height: auto;
         padding: 15px;
     }
+
     .modulo-view {
         padding: 10px;
         overflow: visible;
     }
+
     .header-title {
         margin: 15px 10px 10px 10px;
         font-size: 1.25rem;
     }
+
     .mapa-contenedor {
         height: 300px;
     }
+
     .chart-container {
         min-height: 220px;
     }
+
     .kpi-resumen {
         gap: 10px;
     }
+
     .kpi-box {
         min-width: 100%;
         padding: 14px;
     }
+
     .kpi-box span {
         font-size: 1.2rem;
     }
+
     .modal-content {
         width: 96%;
         max-height: 88vh;
         padding: 18px;
     }
+
     table {
         font-size: 0.8rem;
     }
+
     th, td {
         padding: 9px 10px;
     }
-    .modulo-view {
-        overflow: visible;
-    }
-    /* Estiramiento de gráficos con scroll horizontal en celular */
-    .chart-scroll-x .responsive-chart {
-        min-width: 800px; 
-    }
+    /* CONTENEDOR PARA SCROLL HORIZONTAL DE GRÁFICOS */
+.chart-scroll-x {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    flex: 1; 
 }
-canvas {
-    max-width: 100% !important;
-}
-.modulo-view {
-    will-change: opacity;
 }
