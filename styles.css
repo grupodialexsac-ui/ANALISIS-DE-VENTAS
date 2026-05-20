@@ -180,6 +180,7 @@ tr:hover { background-color: #f8f9fa; }
     /* BARRA LATERAL (MENÚS SUPERIORES) */
     .sidebar { width: 100%; height: auto; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 10; }
     .sidebar-header { padding: 10px; font-size: 0.9rem; }
+    
     .vendedores-list {
         display: flex; overflow-x: auto; white-space: nowrap; padding: 10px;
         background-color: #f8f9fa; -webkit-overflow-scrolling: touch; 
@@ -222,47 +223,16 @@ tr:hover { background-color: #f8f9fa; }
     /* BUSCADOR DE CLIENTES */
     .search-container { flex-direction: column; padding: 15px; }
     .search-btn { width: 100%; }
-    /* ========================================================== */
-/* MEJORAS DE UX/UI PARA PANTALLAS TÁCTILES Y CONTENEDORES    */
-/* ========================================================== */
 
-/* Efecto hover suave para las tarjetas */
-.dashboard-card {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
+    /* --- INYECTADO PARA INTERACTIVIDAD MÓVIL OPTIMIZADA --- */
+    #btnHamburguesa { display: block !important; }
+    #contenedorSelectMovil { display: block !important; }
+    
+    /* Ocultamos las pestañas superiores por defecto en móvil para maximizar espacio */
+    .sidebar .nav-tabs { display: none !important; }
+    /* Mostramos las pestañas solo si se abre la hamburguesa */
+    .sidebar.menu-abierto .nav-tabs { display: flex !important; }
 
-@media (min-width: 1024px) {
-    .dashboard-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
-    }
-}
-
-/* Personalización del Scrollbar de la lista de vendedores en PC */
-#vendedores-list::-webkit-scrollbar {
-    width: 5px;
-}
-
-#vendedores-list::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-#vendedores-list::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-}
-
-#vendedores-list::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.4);
-}
-
-/* Asegurar contenedores de ApexCharts fluidos y limpios */
-.apexcharts-canvas {
-    margin: 0 auto;
-}
-
-/* Corrección para inputs de tipo Contraseña */
-#password-input {
-    letter-spacing: 0.1em;
-}
+    /* Escondemos por completo la lista larga horizontal de vendedores y su cabecera */
+    #listaVendedores, #headerEquipoVentas { display: none !important; }
 }
