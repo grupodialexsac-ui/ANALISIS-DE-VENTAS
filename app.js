@@ -768,14 +768,18 @@ function mostrarModalInactivos(idVendedor, nombreVendedor) {
 
     const clientesInactivos = obtenerInactivosReales(idVendedor);
 
+    const docC = COLS.clientes.documento;
+    const razC = COLS.clientes.razon;
+    const estC = COLS.clientes.estado;
+
     if (clientesInactivos.length === 0) {
         tb.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:#666;">¡Felicidades! Toda la cartera registra compras efectivas.</td></tr>`;
     } else {
         const frag = document.createDocumentFragment();
         clientesInactivos.forEach(c => {
+            const est = c[estC] || 'INACTIVO';
             const tr = document.createElement('tr');
-            // AQUÍ LA MEJORA: Forzamos la etiqueta a "0 TRANSACCIONES" ignorando la columna del Excel
-            tr.innerHTML = `<td>${c[COLS.clientes.documento] || '---'}</td><td>${c[COLS.clientes.razon] || '---'}</td><td><span class="badge badge-inactivo">0 TRANSACCIONES</span></td>`;
+            tr.innerHTML = `<td>${c[docC] || '---'}</td><td>${c[razC] || '---'}</td><td><span class="badge badge-inactivo">${est}</span></td>`;
             frag.appendChild(tr);
         });
         tb.appendChild(frag);
