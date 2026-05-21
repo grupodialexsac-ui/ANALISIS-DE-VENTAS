@@ -6,6 +6,7 @@
     <title>Dashboard Dialex Profesional</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="styles.css">
@@ -30,6 +31,7 @@
             <div class="sidebar-header">
                 <h3>SISTEMA DIALEX</h3>
                 <p>BI & Logística</p>
+                <p id="fechaUltimaVentaSidebar">Última venta: --</p>
             </div>
             <ul class="modulos-list" id="listaModulos">
                 <li class="active" onclick="cambiarModulo('general', this)">GENERAL</li>
@@ -37,6 +39,14 @@
                 <li onclick="cambiarModulo('situacion', this)">SITUACIÓN</li>
                 <li onclick="cambiarModulo('busqueda', this)">BÚSQUEDA</li>
             </ul>
+            <div class="sidebar-actions">
+                <button class="btn-sidebar-action" id="btnActualizar" onclick="window.actualizarDatos()">
+                    <span id="iconoActualizar">↻</span> Actualizar datos
+                </button>
+                <button class="btn-sidebar-action btn-logout" onclick="window.cerrarSesion()">
+                    ⎋ Cerrar sesión
+                </button>
+            </div>
         </aside>
 
         <main class="main-content">
@@ -44,7 +54,10 @@
                 <ul class="vendedores-horizontal-list" id="listaVendedoresHorizontal"></ul>
             </div>
             
-            <h1 class="header-title" id="tituloDashboard">Vista General Comercial</h1>
+            <h1 class="header-title" id="tituloDashboard">
+                Vista General Comercial
+                <span id="fechaUltimaVentaTitulo" style="font-size:0.7rem; font-weight:normal;"></span>
+            </h1>
             
             <div id="vistaGeneral" class="modulo-view">
                 <div class="kpi-resumen" id="kpiGeneral"></div>
@@ -63,21 +76,21 @@
                         </div>
                     </div>
                     <div class="card full-width">
-    <h3>Tendencia de Ventas x Días</h3>
-    <div class="chart-scroll-x"> 
-        <div class="chart-container responsive-chart">
-            <canvas id="chartLineaGeneral"></canvas>
-        </div>
-    </div>
-    </div>
-<div class="card full-width">
-    <h3>Ranking de Cumplimiento de Meta</h3>
-    <div class="chart-scroll-x"> 
-        <div class="chart-container responsive-chart">
-            <canvas id="chartRankingMeta"></canvas>
-        </div>
-    </div>
-    </div>
+                        <h3>Tendencia de Ventas x Días</h3>
+                        <div class="chart-scroll-x"> 
+                            <div class="chart-container responsive-chart">
+                                <canvas id="chartLineaGeneral"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card full-width">
+                        <h3>Ranking de Cumplimiento de Meta</h3>
+                        <div class="chart-scroll-x"> 
+                            <div class="chart-container responsive-chart">
+                                <canvas id="chartRankingMeta"></canvas>
+                            </div>
+                        </div>
+                    </div>
                     <div class="card full-width">
                         <h3>Cobertura Geográfica Nacional</h3>
                         <div id="ContenedorMapaGeneral" class="mapa-contenedor"></div>
@@ -166,8 +179,11 @@
             <div id="vistaBusqueda" class="modulo-view" style="display: none;">
                 <div class="autocomplete-container">
                     <input type="text" id="inputBusquedaCliente" placeholder="🔍 Escribe RUC, DNI o Razón Social para buscar..." autocomplete="off" oninput="buscarAutocompleteCliente(this.value)">
+                    <button class="btn-limpiar-busqueda" id="btnLimpiarBusqueda" onclick="window.limpiarBusqueda()" title="Limpiar búsqueda" style="display:none;">✕</button>
                     <ul class="autocomplete-list" id="listaSugerenciasClientes"></ul>
+                    <div id="loadingSugerencias" style="display:none; padding:10px; text-align:center; color:#5f6368; font-size:0.85rem;">Buscando...</div>
                 </div>
+                <div id="contadorResultados" style="display:none; margin-bottom:10px; font-size:0.82rem; color:#5f6368;"></div>
                 
                 <div class="card" id="panelDetalleCliente" style="display:none; width:100%;">
                     <h3 id="detalleNombreCliente">Seleccione un Cliente</h3>
@@ -193,8 +209,7 @@
         </main>
     </div>
 
-    <div class="modal-overlay" id="modalInactivos" onclick="if(event.target==this) cerrarModalInactivos()">
-        <div class="modal-content">
+    <div class="modal-overlay" id="modalInactivos" onclick="if(event.target==this) cerrarModalInactivos()">        <div class="modal-content">
             <span class="modal-close" onclick="cerrarModalInactivos()">&times;</span>
             <h2 style="margin-top:0; color:#1a73e8; font-size:1.3rem;" id="tituloModalInactivos">Clientes sin Ventas Asociadas</h2>
             <p style="font-size:0.85rem; color:#666; margin-bottom:15px;">Lista de clientes del portafolio que registran cero transacciones según los filtros aplicados.</p>
@@ -204,6 +219,21 @@
                     <tbody></tbody>
                 </table>
             </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalVerTodos" onclick="if(event.target==this) window.cerrarModalVerTodos()">
+        <div class="modal-content">
+            <span class="modal-close" onclick="window.cerrarModalVerTodos()">&times;</span>
+            <h2 style="margin-top:0; color:#1a73e8; font-size:1.3rem;">Resultados de Búsqueda</h2>
+            <p id="subtituloModalVerTodos" style="font-size:0.85rem; color:#666; margin-bottom:15px;"></p>
+            <div class="table-wrapper" style="flex:1; overflow-y:auto;">
+                <table id="tablaVerTodos">
+                    <thead><tr><th>Razón Social</th><th>Documento</th><th class="num-col">Total Comprado</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div id="paginacionVerTodos" style="display:flex; gap:8px; justify-content:center; margin-top:15px; flex-wrap:wrap;"></div>
         </div>
     </div>
 
