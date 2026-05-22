@@ -16,15 +16,19 @@
         clientesRaw: []
     };
 
+    // Variables de Filtro de Fecha Global (basado en mes)
+    let globalStartDate = null;
+    let globalEndDate = null;
+
     // Datos normalizados (índices)
-    let vendedoresMap = new Map(); // id -> objeto normalizado
-    let clientesMap = new Map();   // id -> objeto normalizado
-    let ventasPorVendedor = new Map(); // idVendedor -> array de ventas normalizadas
-    let ventasPorCliente = new Map();   // idCliente -> array de ventas normalizadas
-    let productosPorVendedor = new Map(); // idVendedor -> array de productos normalizados
-    let productosPorCliente = new Map();  // idCliente -> array de productos normalizados
-    let clientesPorVendedor = new Map();   // idVendedor -> array de ids de clientes
-    let lastSaleDate = null; // fecha de última venta (objeto Date)
+    let vendedoresMap = new Map();
+    let clientesMap = new Map();
+    let ventasPorVendedor = new Map();
+    let ventasPorCliente = new Map();
+    let productosPorVendedor = new Map();
+    let productosPorCliente = new Map();
+    let clientesPorVendedor = new Map();
+    let lastSaleDate = null; 
 
     // Configuración de columnas (se llena después de cargar raw)
     let cols = {
@@ -56,7 +60,6 @@
         return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(val || 0);
     }
 
-    // Parseo de fecha estricto, devuelve objeto { string: "DD/MM", sortValue: timestamp } o null
     function parseDateStrict(dateStr) {
         if (!dateStr) return null;
         const base = String(dateStr).split(' ')[0].trim();
@@ -87,7 +90,46 @@
         return { string: `${day}/${month}`, sortValue: fecha.getTime(), fullDate: fecha };
     }
 
-    // Carga CSV con reintento
+    // Convierte un string "YYYY-MM" a fechas de inicio y fin del mes
+    function getMonthRange(monthYear) {
+        if (!monthYear) return { start: null, end: null };
+        const [year, month] = monthYear.split('-').map(Number);
+        const start = new Date(year, month - 1, 1);
+        const end = new Date(year, month, 0); // último día del mes
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+    }
+
+    // Inicializa el selector de mes con el mes actual y aplica filtro
+    function initMonthFilter() {
+        const inputMes = document.getElementById('filtroMes');
+        if (!inputMes) return;
+        const hoy = new Date();
+        const year = hoy.getFullYear();
+        const month = String(hoy.getMonth() + 1).padStart(2, '0');
+        const mesActual = `${year}-${month}`;
+        inputMes.value = mesActual;
+        // Aplicar el filtro automáticamente al cargar
+        aplicarFiltroMes(mesActual);
+    }
+
+    function aplicarFiltroMes(monthYear) {
+        const { start, end } = getMonthRange(monthYear);
+        globalStartDate = start;
+        globalEndDate = end;
+        normalizeAllData();
+        
+        // Recargar vista actual
+        const activeModuloLi = document.querySelector('#listaModulos li.active');
+        window.cambiarModulo(currentModule, activeModuloLi);
+        
+        // Si estamos en búsqueda y hay un cliente seleccionado, refrescar su ficha
+        const currentIdCliente = document.getElementById('detalleDocCliente').dataset.id;
+        if (currentModule === 'busqueda' && currentIdCliente) {
+            mostrarDetalleCliente(currentIdCliente);
+        }
+    }
+
     async function loadCSV(url, retries = 2) {
         for (let i = 0; i <= retries; i++) {
             try {
@@ -108,7 +150,6 @@
         }
     }
 
-    // Encontrar nombre de columna por coincidencia
     function findColumn(obj, options) {
         if (!obj) return null;
         const keys = Object.keys(obj);
@@ -125,7 +166,6 @@
         return keys[0] || null;
     }
 
-    // Inicializar columnas después de cargar raw data
     function initColumns() {
         if (data.vendedoresRaw.length) {
             cols.vendedores = {
@@ -153,7 +193,8 @@
                 documento: findColumn(data.productosRaw[0], ['Documento_Numero', 'RUC', 'DNI']),
                 producto: findColumn(data.productosRaw[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']),
                 unid: findColumn(data.productosRaw[0], ['CANTIDAD UNID', 'UNID']),
-                caja: findColumn(data.productosRaw[0], ['CANTIDAD CAJA', 'CAJA'])
+                caja: findColumn(data.productosRaw[0], ['CANTIDAD CAJA', 'CAJA']),
+                fecha: findColumn(data.productosRaw[0], ['FECHA DE VENTA', 'FECHA', 'FECHA_EMISION', 'FECHA EMISION'])
             };
         }
         if (data.clientesRaw.length) {
@@ -168,9 +209,8 @@
         }
     }
 
-    // Normalización completa de todos los datos (se ejecuta una sola vez)
+    // Normalización con Filtros Aplicados (fechas por mes)
     function normalizeAllData() {
-        // Limpiar mapas
         vendedoresMap.clear();
         clientesMap.clear();
         ventasPorVendedor.clear();
@@ -179,7 +219,7 @@
         productosPorCliente.clear();
         clientesPorVendedor.clear();
 
-        // 1. Normalizar vendedores
+        // 1. Vendedores
         for (const row of data.vendedoresRaw) {
             const id = normalizeText(row[cols.vendedores.id]);
             if (!id) continue;
@@ -187,16 +227,10 @@
             const nombre = row[cols.vendedores.nombre] || '';
             const apellido = row[cols.vendedores.apellido] || '';
             const tipo = normalizeText(row[cols.vendedores.tipo]);
-            vendedoresMap.set(id, {
-                id,
-                nombreCompleto: `${nombre} ${apellido}`.trim(),
-                meta,
-                tipo,
-                raw: row
-            });
+            vendedoresMap.set(id, { id, nombreCompleto: `${nombre} ${apellido}`.trim(), meta, tipo, raw: row });
         }
 
-        // 2. Normalizar clientes y construir índice por vendedor
+        // 2. Clientes
         for (const row of data.clientesRaw) {
             const id = normalizeText(row[cols.clientes.id]);
             if (!id) continue;
@@ -205,49 +239,42 @@
             const ubicacion = row[cols.clientes.ubicacion] || '';
             const idVendedor = normalizeText(row[cols.clientes.idVendedor]);
             const estado = normalizeText(row[cols.clientes.estado]);
-            const clienteNorm = {
-                id,
-                documento,
-                razon,
-                ubicacion,
-                idVendedor,
-                estado
-            };
-            clientesMap.set(id, clienteNorm);
+            clientesMap.set(id, { id, documento, razon, ubicacion, idVendedor, estado });
             if (idVendedor) {
                 if (!clientesPorVendedor.has(idVendedor)) clientesPorVendedor.set(idVendedor, []);
                 clientesPorVendedor.get(idVendedor).push(id);
             }
         }
 
-        // Mapa auxiliar: documento -> idCliente
         const docToId = new Map();
         for (const [id, cli] of clientesMap.entries()) {
             if (cli.documento) docToId.set(normalizeText(cli.documento), id);
         }
 
-        // 3. Normalizar ventas
+        // 3. Ventas con Filtro de Fechas (globalStartDate/globalEndDate)
         let maxDate = null;
         for (const row of data.ventasRaw) {
+            const fechaRaw = row[cols.ventas.fecha];
+            const fechaObj = parseDateStrict(fechaRaw);
+
+            // APLICAR FILTRO GLOBAL (mes)
+            if (globalStartDate || globalEndDate) {
+                if (!fechaObj) continue;
+                if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
+                if (globalEndDate && fechaObj.fullDate > globalEndDate) continue;
+            }
+
             const idVendedor = normalizeText(row[cols.ventas.idVendedor]);
             let idCliente = normalizeText(row[cols.ventas.idCliente]);
             const documento = normalizeText(row[cols.ventas.documento]);
             const total = parseNumber(row[cols.ventas.total]);
-            const fechaRaw = row[cols.ventas.fecha];
-            const fechaObj = parseDateStrict(fechaRaw);
             const razon = row[cols.ventas.razon] || '';
 
             if (!idCliente && documento && docToId.has(documento)) {
                 idCliente = docToId.get(documento);
             }
 
-            const ventaNorm = {
-                idVendedor,
-                idCliente,
-                total,
-                fechaObj,
-                razon
-            };
+            const ventaNorm = { idVendedor, idCliente, total, fechaObj, razon };
 
             if (idVendedor) {
                 if (!ventasPorVendedor.has(idVendedor)) ventasPorVendedor.set(idVendedor, []);
@@ -258,11 +285,11 @@
                 ventasPorCliente.get(idCliente).push(ventaNorm);
             }
 
-            // Actualizar última fecha de venta
             if (fechaObj && fechaObj.fullDate) {
                 if (!maxDate || fechaObj.fullDate > maxDate) maxDate = fechaObj.fullDate;
             }
         }
+        
         lastSaleDate = maxDate;
         if (lastSaleDate) {
             const formatted = lastSaleDate.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -272,8 +299,18 @@
             if (titleElem) titleElem.textContent = `Última venta: ${formatted}`;
         }
 
-        // 4. Normalizar productos
+        // 4. Productos con Filtro de Fechas
         for (const row of data.productosRaw) {
+            const fechaRawProd = cols.productos.fecha ? row[cols.productos.fecha] : null;
+            let fechaObj = parseDateStrict(fechaRawProd);
+
+            // APLICAR FILTRO GLOBAL
+            if (globalStartDate || globalEndDate) {
+                if (!fechaObj) continue;
+                if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
+                if (globalEndDate && fechaObj.fullDate > globalEndDate) continue;
+            }
+
             const idVendedor = normalizeText(row[cols.productos.idVendedor]);
             let idCliente = normalizeText(row[cols.productos.idCliente]);
             const documento = normalizeText(row[cols.productos.documento]);
@@ -285,7 +322,7 @@
                 idCliente = docToId.get(documento);
             }
 
-            const prodNorm = { producto, unid, caja };
+            const prodNorm = { producto, unid, caja, fechaObj };
 
             if (idVendedor) {
                 if (!productosPorVendedor.has(idVendedor)) productosPorVendedor.set(idVendedor, []);
@@ -298,7 +335,25 @@
         }
     }
 
-    // Obtener clientes inactivos (según estado en clientes)
+    // Activa el filtro por mes al pulsar el botón del sidebar
+    window.aplicarFiltroFecha = function() {
+        const mesValue = document.getElementById('filtroMes').value;
+        if (mesValue) {
+            aplicarFiltroMes(mesValue);
+        } else {
+            // Si no hay mes seleccionado, limpiamos filtros
+            globalStartDate = null;
+            globalEndDate = null;
+            normalizeAllData();
+            const activeModuloLi = document.querySelector('#listaModulos li.active');
+            window.cambiarModulo(currentModule, activeModuloLi);
+            const currentIdCliente = document.getElementById('detalleDocCliente').dataset.id;
+            if (currentModule === 'busqueda' && currentIdCliente) {
+                mostrarDetalleCliente(currentIdCliente);
+            }
+        }
+    };
+
     function getInactiveClients(vendedorId = 'GLOBAL') {
         const inactivos = [];
         for (const [id, cliente] of clientesMap.entries()) {
@@ -310,7 +365,6 @@
         return inactivos;
     }
 
-    // Crear o actualizar un gráfico (destruyendo antes)
     function updateChart(chartId, config) {
         const canvas = document.getElementById(chartId);
         if (!canvas) return;
@@ -340,7 +394,6 @@
         mapInstances[containerId] = map;
 
         const featureGroup = L.featureGroup().addTo(map);
-        // Coordenadas aproximadas por ciudad (geocodificación simulada pero basada en ubicación real del cliente)
         const cityCoords = {
             'AREQUIPA': [-16.3988, -71.5369], 'CUSCO': [-13.5319, -71.9675], 'TRUJILLO': [-8.1084, -79.0288],
             'CHICLAYO': [-6.7714, -79.8409], 'PIURA': [-5.1945, -80.6328], 'IQUITOS': [-3.7491, -73.2538],
@@ -348,7 +401,7 @@
             'PUNO': [-15.8402, -70.0219], 'LIMA': [-12.0464, -77.0428]
         };
 
-        const ventasPorClienteMap = new Map(); // idCliente -> total ventas
+        const ventasPorClienteMap = new Map();
         for (const [cliId, ventas] of ventasPorCliente.entries()) {
             const total = ventas.reduce((sum, v) => sum + v.total, 0);
             if (total > 0) ventasPorClienteMap.set(cliId, total);
@@ -360,18 +413,12 @@
             const ubic = normalizeText(cliente.ubicacion);
             let coords = cityCoords['LIMA'];
             for (const [city, coord] of Object.entries(cityCoords)) {
-                if (ubic.includes(city)) {
-                    coords = coord;
-                    break;
-                }
+                if (ubic.includes(city)) { coords = coord; break; }
             }
             const totalVentas = ventasPorClienteMap.get(cliId) || 0;
             const color = totalVentas > 0 ? '#34a853' : '#ea4335';
             const marker = L.marker([coords[0] + (Math.sin(cliId.charCodeAt(0)) * 0.03), coords[1] + (Math.cos(cliId.charCodeAt(cliId.length-1)) * 0.03)], {
-                icon: L.divIcon({
-                    html: `<div style="background:${color};width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.4);"></div>`,
-                    className: 'custom-pin'
-                })
+                icon: L.divIcon({ html: `<div style="background:${color};width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.4);"></div>`, className: 'custom-pin' })
             }).bindPopup(`<b>${cliente.razon || 'Cliente'}</b><br>Facturación: S/ ${totalVentas.toLocaleString()}<br><small>${cliente.ubicacion}</small>`);
             marker.addTo(featureGroup);
         }
@@ -398,7 +445,7 @@
             if (total >= 1000) clientesVip++;
         }
 
-        const kpiHtml = `
+        document.getElementById('kpiGeneral').innerHTML = `
             <div class="kpi-box destacado"><h4>Venta Global Lograda</h4><span>${formatCurrency(ventasTotal)}</span></div>
             <div class="kpi-box"><h4>Meta Global Programada</h4><span style="color:#202124">${formatCurrency(metaTotal)}</span></div>
             <div class="kpi-box" style="border-left: 4px solid #fbbc05;"><h4>Clientes Totales (BD)</h4><span style="color:#fbbc05">${clientesTotales}</span></div>
@@ -407,7 +454,6 @@
                 <h4>Clientes Inactivos</h4><span style="color:#d93025">${inactivosGlobal.length}</span>
             </div>
         `;
-        document.getElementById('kpiGeneral').innerHTML = kpiHtml;
 
         const pct = metaTotal > 0 ? (ventasTotal / metaTotal) * 100 : 0;
         document.getElementById('textoVelocimetroGeneral').textContent = pct.toFixed(1) + '%';
@@ -417,7 +463,6 @@
             options: { responsive: true, maintainAspectRatio: false, rotation: -90, circumference: 180, cutout: '75%', plugins: { legend: { display: false } } }
         });
 
-        // Canales por tipo de vendedor
         const canales = new Map();
         for (const [idV, ventas] of ventasPorVendedor.entries()) {
             const vendedor = vendedoresMap.get(idV);
@@ -431,8 +476,7 @@
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
         });
 
-        // Tendencia diaria
-        const daily = new Map(); // label -> { total, sortValue }
+        const daily = new Map();
         for (const ventas of ventasPorVendedor.values()) {
             for (const v of ventas) {
                 if (v.fechaObj) {
@@ -449,7 +493,6 @@
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
         });
 
-        // Ranking de cumplimiento
         const ranking = [];
         for (const v of vendedoresMap.values()) {
             if (v.meta <= 0) continue;
@@ -465,7 +508,6 @@
             options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, max: 100 } }, plugins: { legend: { display: true, position: 'bottom' } } }
         });
 
-        // Mapa: todos los clientes
         renderMap('ContenedorMapaGeneral', Array.from(clientesMap.keys()));
     }
 
@@ -479,7 +521,7 @@
         const inactivos = getInactiveClients(idV);
         const meta = vendedor.meta;
 
-        const kpiHtml = `
+        document.getElementById('kpiVendedor').innerHTML = `
             <div class="kpi-box destacado"><h4>Cuota Lograda</h4><span>${formatCurrency(totalVentas)}</span></div>
             <div class="kpi-box"><h4>Meta Asignada</h4><span style="color:#333">${formatCurrency(meta)}</span></div>
             <div class="kpi-box" style="border-left: 4px solid #1a73e8;"><h4>Clientes Totales (Cartera)</h4><span style="color:#1a73e8">${clientesIds.length}</span></div>
@@ -487,7 +529,6 @@
                 <h4>Clientes Inactivos</h4><span style="color:#d93025">${inactivos.length}</span>
             </div>
         `;
-        document.getElementById('kpiVendedor').innerHTML = kpiHtml;
 
         const pct = meta > 0 ? (totalVentas / meta) * 100 : 0;
         document.getElementById('textoVelocimetroVendedor').textContent = pct.toFixed(1) + '%';
@@ -504,7 +545,6 @@
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
         });
 
-        // Top 7 clientes
         const clienteTotal = new Map();
         for (const venta of ventasV) {
             if (!venta.idCliente) continue;
@@ -522,14 +562,12 @@
             for (const c of top7) {
                 const tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
-                tr.title = 'Ver detalle del cliente';
                 tr.innerHTML = `<td>${c.razon}</td><td class="num-col">${formatCurrency(c.total)}</td>`;
                 tr.onclick = () => window.navegarAClienteBusqueda(c.id, c.razon);
                 tbodyTop.appendChild(tr);
             }
         }
 
-        // Productos top
         const prodUnid = new Map();
         const prodCaja = new Map();
         const productos = productosPorVendedor.get(idV) || [];
@@ -543,10 +581,7 @@
             const tbody = document.querySelector(`#${tableId} tbody`);
             tbody.innerHTML = '';
             const sorted = Array.from(mapProd.entries()).sort((a,b) => b[1] - a[1]).slice(0,5);
-            if (sorted.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Vacío</td></tr>';
-                return;
-            }
+            if (sorted.length === 0) { tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Vacío</td></tr>'; return; }
             for (const [name, qty] of sorted) {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `<td>${name}</td><td class="num-col">${qty.toLocaleString()}</td>`;
@@ -555,19 +590,13 @@
         };
         renderProdTable('tablaProdUnid', prodUnid);
         renderProdTable('tablaProdCaja', prodCaja);
-
-        // Mapa
         renderMap('ContenedorMapaVendedor', clientesIds);
     }
 
     function loadSituacionModule() {
-        let totalVentas = 0;
-        let numVentas = 0;
+        let totalVentas = 0; let numVentas = 0;
         for (const ventas of ventasPorVendedor.values()) {
-            for (const v of ventas) {
-                totalVentas += v.total;
-                numVentas++;
-            }
+            for (const v of ventas) { totalVentas += v.total; numVentas++; }
         }
         const ticketProm = numVentas > 0 ? totalVentas / numVentas : 0;
         document.getElementById('kpiTicketPromedio').textContent = formatCurrency(ticketProm);
@@ -577,7 +606,6 @@
         const clientesRiesgo = getInactiveClients('GLOBAL').length;
         document.getElementById('kpiRiesgo').textContent = clientesRiesgo;
 
-        // Tabla ABC
         const clientesTotal = [];
         for (const [id, ventas] of ventasPorCliente.entries()) {
             const total = ventas.reduce((s, v) => s + v.total, 0);
@@ -591,42 +619,154 @@
         for (const c of clientesTotal) {
             acum += c.total;
             const pct = totalVentas > 0 ? (acum / totalVentas) * 100 : 0;
-            let segmento = 'C (Crítico)';
-            let badgeClass = 'badge-c';
+            let segmento = 'C (Crítico)'; let badgeClass = 'badge-c';
             if (pct <= 80) { segmento = 'A (Top)'; badgeClass = 'badge-a'; }
             else if (pct <= 95) { segmento = 'B (Medio)'; badgeClass = 'badge-b'; }
             const tr = document.createElement('tr');
             tr.style.cursor = 'pointer';
-            tr.title = 'Ver detalle del cliente';
             tr.innerHTML = `<td>${c.razon}</td><td><span class="badge ${badgeClass}">${segmento}</span></td><td class="num-col">${formatCurrency(c.total)}</td>`;
             tr.onclick = () => window.navegarAClienteBusqueda(c.id, c.razon);
             tbodyABC.appendChild(tr);
         }
 
-        // Mapa: solo clientes con ventas
         const activeClientIds = Array.from(ventasPorCliente.keys());
         renderMap('ContenedorMapaSituacion', activeClientIds);
     }
 
+    // --- Exportar tabla ABC a PDF (versión mejorada y estable) ---
+    window.exportarTablaABC = async function() {
+        const tablaOriginal = document.querySelector('#tablaABC');
+        if (!tablaOriginal) {
+            alert('No se encontró la tabla para exportar.');
+            return;
+        }
+
+        // Verificar que las librerías existen
+        if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+            alert('Las librerías para generar PDF no se cargaron correctamente. Recarga la página.');
+            return;
+        }
+
+        // Mostrar indicador de carga (opcional)
+        const btn = document.querySelector('.btn-export-pdf');
+        const textoOriginal = btn.innerHTML;
+        btn.innerHTML = '⏳ Generando PDF...';
+        btn.disabled = true;
+
+        try {
+            // Clonar profundamente la tabla y su contenedor con estilos calculados
+            const cloneTabla = tablaOriginal.cloneNode(true);
+            // Eliminar eventos y estilos interactivos que puedan interferir
+            const filas = cloneTabla.querySelectorAll('tbody tr');
+            filas.forEach(fila => {
+                fila.removeAttribute('onclick');
+                fila.style.cursor = 'default';
+            });
+            
+            // Crear un contenedor temporal con dimensiones fijas de escritorio
+            const container = document.createElement('div');
+            container.style.position = 'fixed';
+            container.style.left = '-10000px';
+            container.style.top = '0';
+            container.style.width = '1200px'; // ancho estándar PC
+            container.style.backgroundColor = 'white';
+            container.style.padding = '20px';
+            container.style.fontFamily = "'Segoe UI', Arial, sans-serif";
+            container.style.zIndex = '-1';
+            
+            // Añadir título
+            const titulo = document.createElement('h2');
+            titulo.textContent = 'Segmentación ABC Dinámica de Clientes (Pareto 80/20)';
+            titulo.style.color = '#1a73e8';
+            titulo.style.marginBottom = '20px';
+            titulo.style.fontSize = '18px';
+            container.appendChild(titulo);
+            
+            // Aplicar estilos inline a la tabla clonada para asegurar consistencia
+            cloneTabla.style.width = '100%';
+            cloneTabla.style.borderCollapse = 'collapse';
+            cloneTabla.style.fontSize = '12px';
+            const celdasEncabezado = cloneTabla.querySelectorAll('th');
+            celdasEncabezado.forEach(th => {
+                th.style.backgroundColor = '#f8f9fa';
+                th.style.padding = '10px';
+                th.style.borderBottom = '2px solid #dadce0';
+                th.style.textAlign = 'left';
+                th.style.fontWeight = 'bold';
+            });
+            const celdasCuerpo = cloneTabla.querySelectorAll('td');
+            celdasCuerpo.forEach(td => {
+                td.style.padding = '8px 10px';
+                td.style.borderBottom = '1px solid #eee';
+            });
+            // Mantener badges
+            const badges = cloneTabla.querySelectorAll('.badge');
+            badges.forEach(b => {
+                if (b.classList.contains('badge-a')) b.style.backgroundColor = '#e6f4ea';
+                if (b.classList.contains('badge-b')) b.style.backgroundColor = '#fef7e0';
+                if (b.classList.contains('badge-c')) b.style.backgroundColor = '#fce8e6';
+                b.style.padding = '4px 10px';
+                b.style.borderRadius = '12px';
+                b.style.fontSize = '0.7rem';
+                b.style.fontWeight = 'bold';
+                b.style.display = 'inline-block';
+            });
+            
+            container.appendChild(cloneTabla);
+            document.body.appendChild(container);
+            
+            // Esperar un frame para que el navegador renderice
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Capturar con html2canvas
+            const canvas = await html2canvas(container, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                logging: false,
+                useCORS: false,
+                windowWidth: container.scrollWidth,
+                windowHeight: container.scrollHeight
+            });
+            
+            const imgData = canvas.toDataURL('image/png');
+            const { jsPDF } = window.jspdf;
+            // PDF en orientación horizontal (landscape)
+            const pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'mm',
+                format: 'a4'
+            });
+            const imgWidth = 280; // mm (A4 landscape = 297mm, dejamos márgenes)
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            pdf.addImage(imgData, 'PNG', 8, 8, imgWidth, imgHeight);
+            pdf.save('segmentacion_abc_clientes.pdf');
+            
+        } catch (error) {
+            console.error('Error detallado al generar PDF:', error);
+            alert('Ocurrió un error al generar el PDF. Detalle: ' + error.message);
+        } finally {
+            // Limpiar el contenedor temporal
+            const tempContainer = document.body.querySelector('div[style*="left: -10000px"]');
+            if (tempContainer) tempContainer.remove();
+            // Restaurar botón
+            btn.innerHTML = textoOriginal;
+            btn.disabled = false;
+        }
+    };
+
     // --- Fuse.js instance ---
     let fuseInstance = null;
-    let allSearchResults = []; // stores last full search results for "ver todos"
+    let allSearchResults = [];
     let verTodosPage = 0;
     const VER_TODOS_PER_PAGE = 25;
     let searchDebounceTimer = null;
 
     function buildFuseIndex() {
         const items = Array.from(clientesMap.entries()).map(([id, cli]) => ({
-            id,
-            doc: cli.documento || '',
-            razon: cli.razon || ''
+            id, doc: cli.documento || '', razon: cli.razon || ''
         }));
         fuseInstance = new Fuse(items, {
-            keys: ['razon', 'doc'],
-            threshold: 0.35,
-            includeScore: true,
-            ignoreLocation: true,
-            useExtendedSearch: false,
+            keys: ['razon', 'doc'], threshold: 0.35, includeScore: true, ignoreLocation: true, useExtendedSearch: false,
             getFn: (obj, path) => {
                 const key = Array.isArray(path) ? path[path.length - 1] : path;
                 const val = obj[key];
@@ -635,7 +775,6 @@
         });
     }
 
-    // --- Autocomplete y búsqueda ---
     window.buscarAutocompleteCliente = function(texto) {
         const ul = document.getElementById('listaSugerenciasClientes');
         const input = document.getElementById('inputBusquedaCliente');
@@ -652,14 +791,12 @@
             return;
         }
 
-        // Show loading indicator
         ul.style.display = 'none';
         if (loading) loading.style.display = 'block';
 
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(() => {
             if (loading) loading.style.display = 'none';
-
             const query = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
             let results = [];
 
@@ -668,7 +805,6 @@
                 results = raw.map(r => r.item);
                 allSearchResults = results;
             } else {
-                // Fallback si Fuse no está listo
                 for (const [id, cli] of clientesMap.entries()) {
                     const searchStr = (cli.documento + ' ' + cli.razon).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
                     if (searchStr.includes(query)) results.push({ id, doc: cli.documento, razon: cli.razon });
@@ -678,7 +814,6 @@
 
             const total = results.length;
             const shown = results.slice(0, 15);
-
             let html = '';
             for (const r of shown) {
                 const total = (ventasPorCliente.get(r.id) || []).reduce((s, v) => s + v.total, 0);
@@ -708,8 +843,7 @@
 
     window.limpiarBusqueda = function() {
         const input = document.getElementById('inputBusquedaCliente');
-        input.value = '';
-        input.focus();
+        input.value = ''; input.focus();
         document.getElementById('listaSugerenciasClientes').style.display = 'none';
         document.getElementById('panelDetalleCliente').style.display = 'none';
         document.getElementById('btnLimpiarBusqueda').style.display = 'none';
@@ -726,8 +860,7 @@
     };
 
     function renderVerTodosPage(texto) {
-        const results = allSearchResults;
-        const total = results.length;
+        const results = allSearchResults; const total = results.length;
         document.getElementById('subtituloModalVerTodos').textContent = `${total} clientes coinciden con "${texto}"`;
         const start = verTodosPage * VER_TODOS_PER_PAGE;
         const page = results.slice(start, start + VER_TODOS_PER_PAGE);
@@ -737,15 +870,10 @@
             const totalComprado = (ventasPorCliente.get(r.id) || []).reduce((s, v) => s + v.total, 0);
             const tr = document.createElement('tr');
             tr.style.cursor = 'pointer';
-            tr.title = 'Ver detalle del cliente';
             tr.innerHTML = `<td>${r.razon || '---'}</td><td>${r.doc || '---'}</td><td class="num-col">${formatCurrency(totalComprado)}</td>`;
-            tr.onclick = () => {
-                window.cerrarModalVerTodos();
-                window.seleccionarSugerencia(r.id, r.doc, r.razon);
-            };
+            tr.onclick = () => { window.cerrarModalVerTodos(); window.seleccionarSugerencia(r.id, r.doc, r.razon); };
             tbody.appendChild(tr);
         }
-        // Paginación
         const totalPages = Math.ceil(total / VER_TODOS_PER_PAGE);
         const pag = document.getElementById('paginacionVerTodos');
         pag.innerHTML = '';
@@ -758,14 +886,64 @@
         }
     }
 
-    window.cerrarModalVerTodos = function() {
-        document.getElementById('modalVerTodos').style.display = 'none';
-    };
+    window.cerrarModalVerTodos = function() { document.getElementById('modalVerTodos').style.display = 'none'; };
 
     window.seleccionarSugerencia = function(idC, doc, razon) {
         document.getElementById('listaSugerenciasClientes').style.display = 'none';
         document.getElementById('inputBusquedaCliente').value = razon || doc;
         mostrarDetalleCliente(idC);
+    };
+
+    // Funciones exclusivas del filtro por clic en gráfico
+    window.limpiarFiltroProductos = function() {
+        const idC = document.getElementById('detalleDocCliente').dataset.id;
+        if(idC) window.filtrarProductosPorFecha(idC, null);
+    };
+
+    window.filtrarProductosPorFecha = function(idC, dateStringFilter) {
+        const productos = productosPorCliente.get(idC) || [];
+        const prodMap = new Map();
+        
+        for (const p of productos) {
+            if (!p.producto) continue;
+            
+            if (dateStringFilter) {
+                if (!p.fechaObj || p.fechaObj.string !== dateStringFilter) continue;
+            }
+            
+            const actualUnid = p.unid || 0;
+            const actualCaja = p.caja || 0;
+            
+            if (!prodMap.has(p.producto)) {
+                prodMap.set(p.producto, { unid: 0, caja: 0 });
+            }
+            prodMap.get(p.producto).unid += actualUnid;
+            prodMap.get(p.producto).caja += actualCaja;
+        }
+        
+        const tbodyProd = document.querySelector('#tablaClienteProductos tbody');
+        tbodyProd.innerHTML = '';
+        
+        if (prodMap.size === 0) {
+            tbodyProd.innerHTML = `<tr><td colspan="2" style="text-align:center;">Sin transacciones ${dateStringFilter ? 'en esta fecha' : ''}</td></tr>`;
+        } else {
+            for (const [prod, qtyObj] of prodMap.entries()) {
+                const tr = document.createElement('tr');
+                const qtyText = qtyObj.caja > 0 ? `${qtyObj.caja} cjs` : `${qtyObj.unid} und`;
+                tr.innerHTML = `<td>${prod}</td><td class="num-col">${qtyText}</td>`;
+                tbodyProd.appendChild(tr);
+            }
+        }
+        
+        const lbl = document.getElementById('lblFiltroProdFecha');
+        const btnClear = document.getElementById('btnLimpiarFiltroProd');
+        if (dateStringFilter) {
+            lbl.textContent = `(Solo ${dateStringFilter})`;
+            btnClear.style.display = 'inline-block';
+        } else {
+            lbl.textContent = '';
+            btnClear.style.display = 'none';
+        }
     };
 
     function mostrarDetalleCliente(idC) {
@@ -775,7 +953,10 @@
         panel.style.display = 'flex';
         panel.style.flexDirection = 'column';
         document.getElementById('detalleNombreCliente').textContent = cliente.razon || 'Cliente Innominado';
-        document.getElementById('detalleDocCliente').textContent = cliente.documento || idC;
+        
+        const docElem = document.getElementById('detalleDocCliente');
+        docElem.textContent = cliente.documento || idC;
+        docElem.dataset.id = idC;
 
         const ventas = ventasPorCliente.get(idC) || [];
         const totalFact = ventas.reduce((s, v) => s + v.total, 0);
@@ -783,7 +964,6 @@
         const estadoBadge = totalFact > 0 ? '<span class="badge badge-activo">ACTIVO COMPRADOR</span>' : '<span class="badge badge-inactivo">INACTIVO SIN COMPRAS</span>';
         document.getElementById('detalleEstadoCli').innerHTML = estadoBadge;
 
-        // Historial
         const hist = new Map();
         for (const v of ventas) {
             if (v.fechaObj) {
@@ -795,32 +975,27 @@
         const sortedHist = Array.from(hist.entries()).sort((a,b) => a[1].sortValue - b[1].sortValue);
         updateChart('chartClienteHistorial', {
             type: 'bar',
-            data: { labels: sortedHist.map(h => h[0]), datasets: [{ label: 'Compras S/', data: sortedHist.map(h => h[1].total), backgroundColor: '#34a853', borderRadius: 4 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            data: { labels: sortedHist.map(h => h[0]), datasets: [{ label: 'Compras S/', data: sortedHist.map(h => h[1].total), backgroundColor: '#34a853', borderRadius: 4, hoverBackgroundColor: '#1a73e8' }] },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { legend: { display: false } },
+                onHover: (event, chartElement) => {
+                    event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                },
+                onClick: (event, activeElements) => {
+                    if (activeElements.length > 0) {
+                        const index = activeElements[0].index;
+                        const clickedDateString = sortedHist[index][0];
+                        window.filtrarProductosPorFecha(idC, clickedDateString);
+                    }
+                }
+            }
         });
 
-        // Productos
-        const productos = productosPorCliente.get(idC) || [];
-        const prodMap = new Map();
-        for (const p of productos) {
-            if (!p.producto) continue;
-            const qty = p.caja > 0 ? `${p.caja} cjs` : `${p.unid} und`;
-            prodMap.set(p.producto, qty);
-        }
-        const tbodyProd = document.querySelector('#tablaClienteProductos tbody');
-        tbodyProd.innerHTML = '';
-        if (prodMap.size === 0) {
-            tbodyProd.innerHTML = '<tr><td colspan="2" style="text-align:center;">Sin transacciones</td></tr>';
-        } else {
-            for (const [prod, qty] of prodMap.entries()) {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${prod}</td><td class="num-col">${qty}</td>`;
-                tbodyProd.appendChild(tr);
-            }
-        }
+        window.filtrarProductosPorFecha(idC, null);
     }
 
-    // --- Modal inactivos ---
     window.mostrarModalInactivos = function(vendedorId, nombreVendedor) {
         const inactivos = getInactiveClients(vendedorId);
         document.getElementById('tituloModalInactivos').textContent = `Clientes Inactivos de: ${nombreVendedor}`;
@@ -832,23 +1007,16 @@
             for (const cli of inactivos) {
                 const tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
-                tr.title = 'Ver detalle del cliente';
                 tr.innerHTML = `<td>${cli.documento || '---'}</td><td>${cli.razon || '---'}</td><td><span class="badge badge-inactivo">${cli.estado || 'INACTIVO'}</span></td>`;
-                tr.onclick = () => {
-                    window.cerrarModalInactivos();
-                    window.navegarAClienteBusqueda(cli.id, cli.razon);
-                };
+                tr.onclick = () => { window.cerrarModalInactivos(); window.navegarAClienteBusqueda(cli.id, cli.razon); };
                 tbody.appendChild(tr);
             }
         }
         document.getElementById('modalInactivos').style.display = 'flex';
     };
 
-    window.cerrarModalInactivos = function() {
-        document.getElementById('modalInactivos').style.display = 'none';
-    };
+    window.cerrarModalInactivos = function() { document.getElementById('modalInactivos').style.display = 'none'; };
 
-    // Navega al módulo Búsqueda y muestra el detalle del cliente
     window.navegarAClienteBusqueda = function(idCliente, razon) {
         const li = document.querySelector('#listaModulos li:nth-child(4)');
         window.cambiarModulo('busqueda', li);
@@ -860,26 +1028,17 @@
         mostrarDetalleCliente(idCliente);
     };
 
-    // Actualizar datos con feedback visual
     window.actualizarDatos = async function() {
         const btn = document.getElementById('btnActualizar');
         const icono = document.getElementById('iconoActualizar');
         if (!btn || btn.disabled) return;
-        btn.disabled = true;
-        btn.style.opacity = '0.6';
-        icono.style.display = 'inline-block';
-        icono.style.animation = 'spin 0.8s linear infinite';
+        btn.disabled = true; btn.style.opacity = '0.6';
+        icono.style.display = 'inline-block'; icono.style.animation = 'spin 0.8s linear infinite';
         try {
             const [vendedores, ventas, productos, clientes] = await Promise.all([
-                loadCSV(urls.vendedores),
-                loadCSV(urls.ventas),
-                loadCSV(urls.productos),
-                loadCSV(urls.clientes)
+                loadCSV(urls.vendedores), loadCSV(urls.ventas), loadCSV(urls.productos), loadCSV(urls.clientes)
             ]);
-            data.vendedoresRaw = vendedores;
-            data.ventasRaw = ventas;
-            data.productosRaw = productos;
-            data.clientesRaw = clientes;
+            data.vendedoresRaw = vendedores; data.ventasRaw = ventas; data.productosRaw = productos; data.clientesRaw = clientes;
             initColumns();
             normalizeAllData();
             buildFuseIndex();
@@ -887,33 +1046,27 @@
             const activeModuloLi = document.querySelector('#listaModulos li.active');
             const activeModulo = activeModuloLi ? activeModuloLi.textContent.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace('general','general').replace('productividad','productividad').replace('situacion','situacion').replace('busqueda','busqueda') : 'general';
             window.cambiarModulo(currentModule, activeModuloLi);
-            icono.textContent = '✓';
-            icono.style.animation = 'none';
+            icono.textContent = '✓'; icono.style.animation = 'none';
             setTimeout(() => { icono.textContent = '↻'; }, 2000);
         } catch(e) {
-            icono.textContent = '✗';
-            icono.style.animation = 'none';
+            icono.textContent = '✗'; icono.style.animation = 'none';
             setTimeout(() => { icono.textContent = '↻'; }, 2000);
         } finally {
-            btn.disabled = false;
-            btn.style.opacity = '1';
+            btn.disabled = false; btn.style.opacity = '1';
         }
     };
 
-    // Cerrar sesión
     window.cerrarSesion = function() {
         document.getElementById('appContainer').style.visibility = 'hidden';
         const loginScreen = document.getElementById('loginScreen');
-        loginScreen.style.opacity = '0';
-        loginScreen.style.display = 'flex';
+        loginScreen.style.opacity = '0'; loginScreen.style.display = 'flex';
         document.getElementById('passInput').value = '';
         document.getElementById('loginError').style.display = 'none';
         requestAnimationFrame(() => { loginScreen.style.opacity = '1'; });
     };
 
-    // --- Cambio de módulo (expuesto globalmente) ---
     window.cambiarModulo = function(modulo, elemento) {
-        if (currentModule === modulo && document.getElementById('appContainer').style.visibility === 'visible') return;
+        if (currentModule === modulo && document.getElementById('appContainer').style.visibility === 'visible' && !elemento) return;
         currentModule = modulo;
         document.querySelectorAll('.modulos-list li').forEach(el => el.classList.remove('active'));
         if (elemento) elemento.classList.add('active');
@@ -929,61 +1082,44 @@
         };
         vistas[modulo].style.display = 'block';
 
-        if (modulo === 'general') {
-            document.getElementById('tituloDashboard').innerHTML = 'Vista General Comercial <span id="fechaUltimaVentaTitulo" style="font-size:0.7rem; font-weight:normal;"></span>';
-            if (lastSaleDate) {
-                const formatted = lastSaleDate.toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-                const titleSpan = document.getElementById('fechaUltimaVentaTitulo');
-                if (titleSpan) titleSpan.textContent = `Última venta: ${formatted}`;
-            }
-            loadGeneralModule();
-        } else if (modulo === 'productividad') {
-            document.getElementById('menuVendedoresContainer').style.display = 'flex';
-            document.getElementById('tituloDashboard').innerHTML = 'Análisis de Productividad <span id="fechaUltimaVentaTitulo" style="font-size:0.7rem; font-weight:normal;"></span>';
-            if (lastSaleDate) {
-                const formatted = lastSaleDate.toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-                const titleSpan = document.getElementById('fechaUltimaVentaTitulo');
-                if (titleSpan) titleSpan.textContent = `Última venta: ${formatted}`;
-            }
-            const listaVendedores = document.getElementById('listaVendedoresHorizontal');
-            if (listaVendedores.children.length > 0 && !currentVendedor) {
-                listaVendedores.children[0].click();
-            } else if (currentVendedor) {
-                loadProductividadModule(currentVendedor);
-            }
-        } else if (modulo === 'situacion') {
-            document.getElementById('tituloDashboard').innerHTML = 'Estrategia de Rentabilidad <span id="fechaUltimaVentaTitulo" style="font-size:0.7rem; font-weight:normal;"></span>';
-            if (lastSaleDate) {
-                const formatted = lastSaleDate.toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-                const titleSpan = document.getElementById('fechaUltimaVentaTitulo');
-                if (titleSpan) titleSpan.textContent = `Última venta: ${formatted}`;
-            }
-            loadSituacionModule();
-        } else if (modulo === 'busqueda') {
-            document.getElementById('tituloDashboard').innerHTML = 'Directorio Analítico <span id="fechaUltimaVentaTitulo" style="font-size:0.7rem; font-weight:normal;"></span>';
-            if (lastSaleDate) {
-                const formatted = lastSaleDate.toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-                const titleSpan = document.getElementById('fechaUltimaVentaTitulo');
-                if (titleSpan) titleSpan.textContent = `Última venta: ${formatted}`;
-            }
-            document.getElementById('inputBusquedaCliente').value = '';
-            document.getElementById('listaSugerenciasClientes').style.display = 'none';
-            document.getElementById('panelDetalleCliente').style.display = 'none';
-            const btnLimpiar = document.getElementById('btnLimpiarBusqueda');
-            if (btnLimpiar) btnLimpiar.style.display = 'none';
-            const contador = document.getElementById('contadorResultados');
-            if (contador) contador.style.display = 'none';
+        const baseTitle = {
+            'general': 'Vista General Comercial', 'productividad': 'Análisis de Productividad',
+            'situacion': 'Estrategia de Rentabilidad', 'busqueda': 'Directorio Analítico'
+        }[modulo];
+
+        document.getElementById('tituloDashboard').innerHTML = `${baseTitle} <span id="fechaUltimaVentaTitulo" style="font-size:0.7rem; font-weight:normal;"></span>`;
+        if (lastSaleDate) {
+            const formatted = lastSaleDate.toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+            const titleSpan = document.getElementById('fechaUltimaVentaTitulo');
+            if (titleSpan) titleSpan.textContent = `Última venta: ${formatted}`;
         }
 
-        // invalidar mapas después de un breve timeout
-        setTimeout(() => {
-            for (const id in mapInstances) {
-                mapInstances[id].invalidateSize();
+        if (modulo === 'general') loadGeneralModule();
+        else if (modulo === 'productividad') {
+            document.getElementById('menuVendedoresContainer').style.display = 'flex';
+            const listaVendedores = document.getElementById('listaVendedoresHorizontal');
+            if (listaVendedores.children.length > 0 && !currentVendedor) listaVendedores.children[0].click();
+            else if (currentVendedor) loadProductividadModule(currentVendedor);
+        }
+        else if (modulo === 'situacion') loadSituacionModule();
+        else if (modulo === 'busqueda') {
+            const currentDoc = document.getElementById('detalleDocCliente').dataset.id;
+            if(!currentDoc) {
+                document.getElementById('inputBusquedaCliente').value = '';
+                document.getElementById('listaSugerenciasClientes').style.display = 'none';
+                document.getElementById('panelDetalleCliente').style.display = 'none';
+                const btnLimpiar = document.getElementById('btnLimpiarBusqueda');
+                if (btnLimpiar) btnLimpiar.style.display = 'none';
+                const contador = document.getElementById('contadorResultados');
+                if (contador) contador.style.display = 'none';
             }
+        }
+
+        setTimeout(() => {
+            for (const id in mapInstances) { mapInstances[id].invalidateSize(); }
         }, 100);
     };
 
-    // --- Generar menú de vendedores ---
     function generateVendedoresMenu() {
         const lista = document.getElementById('listaVendedoresHorizontal');
         lista.innerHTML = '';
@@ -1003,36 +1139,26 @@
         }
     }
 
-    // --- Inicialización principal ---
     async function inicializarApp() {
         try {
             const [vendedores, ventas, productos, clientes] = await Promise.all([
-                loadCSV(urls.vendedores),
-                loadCSV(urls.ventas),
-                loadCSV(urls.productos),
-                loadCSV(urls.clientes)
+                loadCSV(urls.vendedores), loadCSV(urls.ventas), loadCSV(urls.productos), loadCSV(urls.clientes)
             ]);
-            data.vendedoresRaw = vendedores;
-            data.ventasRaw = ventas;
-            data.productosRaw = productos;
-            data.clientesRaw = clientes;
+            data.vendedoresRaw = vendedores; data.ventasRaw = ventas; data.productosRaw = productos; data.clientesRaw = clientes;
 
             initColumns();
-            normalizeAllData();
+            // Inicializar filtro por mes actual ANTES de normalizar
+            initMonthFilter(); // esto setea globalStartDate/EndDate y llama normalizeAllData()
             buildFuseIndex();
             generateVendedoresMenu();
 
-            // Forzar módulo general
             const activeModuloLi = document.querySelector('#listaModulos li.active');
             window.cambiarModulo('general', activeModuloLi);
 
             setTimeout(() => {
                 document.getElementById('loadingScreen').style.display = 'none';
                 document.getElementById('appContainer').style.visibility = 'visible';
-                // Redibujar gráficos por si acaso
-                for (const id in charts) {
-                    if (charts[id] && charts[id].resize) charts[id].resize();
-                }
+                for (const id in charts) { if (charts[id] && charts[id].resize) charts[id].resize(); }
             }, 600);
         } catch (err) {
             console.error(err);
@@ -1042,19 +1168,8 @@
         }
     }
 
-    // --- Login con SHA-256 ---
     window.verificarPassword = async function() {
         const inputPass = document.getElementById('passInput').value;
-        const encoder = new TextEncoder();
-        const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(inputPass));
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        // Hash de "Dialex123" es: 5e8c2d9b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b (ejemplo, debes calcularlo)
-        // Para simplificar, comparamos con el hash real de "Dialex123"
-        // Calcula el hash con console.log o usa este: (puedes generarlo en https://emn178.github.io/online-tools/sha256.html)
-        const correctHash = 'e2c6c5a2e0e6b4e8e0e6b4e8e0e6b4e8e0e6b4e8e0e6b4e8e0e6b4e8e0e6b4e8'; // DEBES REEMPLAZAR CON EL HASH REAL DE TU CONTRASEÑA
-        // Como es un ejemplo, dejaré que acepte "Dialex123" directamente (por compatibilidad)
-        // En producción, calcula el hash de tu contraseña y ponlo aquí.
         if (inputPass === 'Dialex123') {
             document.getElementById('loginScreen').style.opacity = '0';
             setTimeout(() => {
@@ -1067,11 +1182,8 @@
         }
     };
 
-    window.evaluarTeclado = function(e) {
-        if (e.key === 'Enter') window.verificarPassword();
-    };
+    window.evaluarTeclado = function(e) { if (e.key === 'Enter') window.verificarPassword(); };
 
-    // Cerrar autocomplete al hacer clic fuera
     document.addEventListener('click', function(e) {
         const list = document.getElementById('listaSugerenciasClientes');
         const input = document.getElementById('inputBusquedaCliente');
