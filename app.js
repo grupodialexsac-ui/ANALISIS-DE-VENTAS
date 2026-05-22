@@ -167,24 +167,39 @@
     vendedoresMap.clear(); clientesMap.clear(); ventasPorVendedor.clear(); ventasPorCliente.clear();
     productosPorVendedor.clear(); productosPorCliente.clear(); clientesPorVendedor.clear();
 
-    // ... (mapeo de vendedores y clientes permanece igual)
+    // Mapa temporal para deduplicar ventas por Documento_Numero
+    const ventasPorDocumento = new Map();
 
-    const docToId = new Map();
-    for (const [id, cli] of clientesMap.entries()) {
-        if (cli.documento) docToId.set(normalizeText(cli.documento), id);
+    for (const row of data.vendedoresRaw) {
+        const id = normalizeText(row[cols.vendedores.id]); if (!id) continue;
+        const meta = parseNumber(row[cols.vendedores.meta]); const nombre = row[cols.vendedores.nombre] || ''; const apellido = row[cols.vendedores.apellido] || ''; const tipo = normalizeText(row[cols.vendedores.tipo]);
+        vendedoresMap.set(id, { id, nombreCompleto: `${nombre} ${apellido}`.trim(), meta, tipo, raw: row });
     }
 
-    let maxDate = null;
-    for (const row of data.ventasRaw) {
-        // ❌ ELIMINAMOS la línea que saltaba filas sin ID_VENDEDOR
-        // if (!row[cols.ventas.idVendedor]) continue;  ← ¡FUERA!
+    for (const row of data.clientesRaw) {
+        const id = normalizeText(row[cols.clientes.id]); if (!id) continue;
+        const documento = row[cols.clientes.documento] || ''; const razon = row[cols.clientes.razon] || ''; const ubicacion = row[cols.clientes.ubicacion] || ''; const idVendedor = normalizeText(row[cols.clientes.idVendedor]); const estado = normalizeText(row[cols.clientes.estado]);
+        clientesMap.set(id, { id, documento, razon, ubicacion, idVendedor, estado });
+        if (idVendedor) { if (!clientesPorVendedor.has(idVendedor)) clientesPorVendedor.set(idVendedor, []); clientesPorVendedor.get(idVendedor).push(id); }
+    }
 
+    const docToId = new Map();
+    for (const [id, cli] of clientesMap.entries()) { if (cli.documento) docToId.set(normalizeText(cli.documento), id); }
+
+    let maxDate = null;
+
+    // PRIMERA PASADA: procesar cada fila de ventas, PERO deduplicando por número de documento
+    for (const row of data.ventasRaw) {
+        // Permitir filas sin idVendedor; se asignarán a "SIN_ASIGNAR"
+        const idVendedorRaw = row[cols.ventas.idVendedor] ? normalizeText(row[cols.ventas.idVendedor]) : '';
+
+        // Leer total
         let total = parseNumber(row[cols.ventas.total]);
 
-        // Manejo de Notas de Crédito (aunque ahora no las uses, lo dejamos preparado)
+        // Manejo de NC (solo si el tipo indica negación y el número no venga ya en negativo)
         if (cols.ventas.tipo) {
             const tipoVenta = normalizeText(row[cols.ventas.tipo]);
-            const esNC = tipoVenta === 'NC' ||
+            const esNC = tipoVenta === 'NC' || 
                          (tipoVenta.includes('NOTA') && tipoVenta.includes('CREDITO')) ||
                          tipoVenta.includes('ANULAD') || tipoVenta.includes('DEVOL');
             if (esNC && total > 0) {
@@ -192,30 +207,52 @@
             }
         }
 
-        // Solo ignorar si el total es 0 y no hay más contexto (ajústalo si necesitas conservar ceros)
-        if (total === 0) continue;
+        if (total === 0) continue; // omitir operaciones sin importe
 
-        const fechaRaw = row[cols.ventas.fecha];
+        const fechaRaw = row[cols.ventas.fecha]; 
         const fechaObj = parseDateStrict(fechaRaw);
 
+        // Si hay filtro de mes, solo se conservan las fechas válidas y en el rango
         if (globalStartDate || globalEndDate) {
-            if (!fechaObj) continue;
+            if (!fechaObj) continue; 
             if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
             if (globalEndDate && fechaObj.fullDate > globalEndDate) continue;
         }
 
-        // idVendedor puede ser nulo, se usará 'SIN_VENDEDOR' para agrupar
-        const idVendedorRaw = normalizeText(row[cols.ventas.idVendedor]);
-        const idVendedor = idVendedorRaw || 'SIN_VENDEDOR';  // clave para ventas sin asignar
-
+        // Datos del cliente: usar documento para mapear ID si viene vacío
         let idCliente = normalizeText(row[cols.ventas.idCliente]);
-        const documento = normalizeText(row[cols.ventas.documento]);
+        const documentoVenta = normalizeText(row[cols.ventas.documento]);
         const razon = row[cols.ventas.razon] || '';
-
-        if (!idCliente && documento && docToId.has(documento)) {
-            idCliente = docToId.get(documento);
+        if (!idCliente && documentoVenta && docToId.has(documentoVenta)) {
+            idCliente = docToId.get(documentoVenta);
         }
 
+        // CLAVE DE DEDUPLICACIÓN: número de documento (si existe)
+        const docKey = documentoVenta || `ROW_${Math.random().toString(36).substr(2, 9)}`; // si no hay documento, se trata como única
+        if (!ventasPorDocumento.has(docKey)) {
+            // Guardamos la primera aparición del documento
+            ventasPorDocumento.set(docKey, {
+                idVendedor: idVendedorRaw || 'SIN_ASIGNAR',
+                idCliente: idCliente,
+                total: total,
+                fechaObj: fechaObj,
+                razon: razon
+            });
+        } else {
+            // Si ya existe, sumamos el total? NO: si la misma factura aparece en varias líneas, asumimos que el total es el mismo.
+            // Pero para evitar sobre-conteo, simplemente NO sumamos de nuevo. Opcionalmente podemos advertir.
+            // También actualizamos la fecha si es posterior (por si acaso)
+            const existente = ventasPorDocumento.get(docKey);
+            if (fechaObj && (!existente.fechaObj || fechaObj.fullDate > existente.fechaObj.fullDate)) {
+                existente.fechaObj = fechaObj;
+            }
+            // No modificamos el total; confiamos en que es el mismo.
+        }
+    }
+
+    // SEGUNDA PASADA: con los documentos deduplicados, llenar los mapas finales
+    for (const [doc, venta] of ventasPorDocumento.entries()) {
+        const { idVendedor, idCliente, total, fechaObj, razon } = venta;
         const ventaNorm = { idVendedor, idCliente, total, fechaObj, razon };
 
         if (idVendedor) {
@@ -230,6 +267,38 @@
             if (!maxDate || fechaObj.fullDate > maxDate) maxDate = fechaObj.fullDate;
         }
     }
+
+    lastSaleDate = maxDate;
+    if (lastSaleDate) {
+        const formatted = lastSaleDate.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const sidebarElem = document.getElementById('fechaUltimaVentaSidebar'); const titleElem = document.getElementById('fechaUltimaVentaTitulo');
+        if (sidebarElem) sidebarElem.textContent = `Última venta: ${formatted}`; if (titleElem) titleElem.textContent = `Última venta: ${formatted}`;
+    }
+
+    // Productos (sin deduplicar, pues aquí sí puede haber varias líneas por producto)
+    for (const row of data.productosRaw) {
+        if (!row[cols.productos.idVendedor] || !row[cols.productos.idCliente]) continue;
+
+        const fechaRawProd = cols.productos.fecha ? row[cols.productos.fecha] : null; let fechaObj = parseDateStrict(fechaRawProd);
+
+        if (globalStartDate || globalEndDate) {
+            if (!fechaObj) continue;
+            if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
+            if (globalEndDate && fechaObj.fullDate > globalEndDate) continue;
+        }
+
+        const idVendedor = normalizeText(row[cols.productos.idVendedor]); let idCliente = normalizeText(row[cols.productos.idCliente]);
+        const documento = normalizeText(row[cols.productos.documento]); const producto = row[cols.productos.producto] || '';
+        const unid = parseNumber(row[cols.productos.unid]); const caja = parseNumber(row[cols.productos.caja]);
+
+        if (!idCliente && documento && docToId.has(documento)) { idCliente = docToId.get(documento); }
+
+        const prodNorm = { producto, unid, caja, fechaObj };
+
+        if (idVendedor) { if (!productosPorVendedor.has(idVendedor)) productosPorVendedor.set(idVendedor, []); productosPorVendedor.get(idVendedor).push(prodNorm); }
+        if (idCliente) { if (!productosPorCliente.has(idCliente)) productosPorCliente.set(idCliente, []); productosPorCliente.get(idCliente).push(prodNorm); }
+    }
+};
         
     function getInactiveClients(vendedorId = 'GLOBAL') {
         const inactivos = [];
