@@ -294,8 +294,9 @@
             }
 
             // Crear clave única para evitar duplicados (previene errores por filas repetidas en CSV)
-            const uniqueKey = `${idVendedor}|${idCliente}|${documento}|${total}|${fechaRaw}`;
-            if (ventasSet.has(uniqueKey)) continue;
+// Usar la fecha normalizada (string "dd/mm") para evitar duplicados por formato
+const fechaNormalizada = fechaObj ? fechaObj.string : 'sin_fecha';
+const uniqueKey = `${idVendedor}|${idCliente}|${documento}|${total}|${fechaNormalizada}`;            if (ventasSet.has(uniqueKey)) continue;
             ventasSet.add(uniqueKey);
 
             const ventaNorm = { idVendedor, idCliente, total, fechaObj, razon };
