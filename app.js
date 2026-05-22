@@ -1,4 +1,4 @@
-// Módulo principal con encapsulación y mejoras de rendimiento - VERSIÓN CORREGIDA (Sumas exactas)
+// Módulo principal con encapsulación y mejoras de rendimiento - VERSIÓN SINCRONIZADA LOOKER
 (function() {
     // --- URLs de datos ---
     const urls = {
@@ -23,74 +23,48 @@
         return t ? String(t).replace(/\s+/g, ' ').trim().toUpperCase() : '';
     }
 
-    // PARSER NUMÉRICO DEFINITIVO (Maneja miles, decimales, símbolos, caracteres ocultos)
+    // CLON DE GOOGLE SHEETS: Ignora textos y lee solo números puros
     function parseNumber(val) {
         if (val === null || val === undefined || val === '') return 0;
+        let str = String(val).trim();
         
-        // Convertir a string y eliminar caracteres no imprimibles
-        let str = String(val)
-            .replace(/[\u200B-\u200D\uFEFF]/g, '') // eliminar zero-width spaces
-            .trim();
-        
-        if (str === '') return 0;
-        
-        // 1. Manejo de negativos contables: (150.00) -> -150.00
+        // Manejo de negativos contables ej: (150.00) -> -150.00
         if (str.startsWith('(') && str.endsWith(')')) {
             str = '-' + str.slice(1, -1).trim();
         }
         
-        // 2. Eliminar símbolos de moneda S/ , S/. , $ y cualquier otro texto no numérico al inicio
-        str = str.replace(/^[^0-9\-\.\,]+/, ''); // elimina cualquier texto antes del primer número
+        // Eliminamos S/ y S/. explícitamente
         str = str.replace(/S\/\.?/gi, '').replace(/\$/g, '').trim();
         
-        // 3. Reemplazar guiones raros por el estándar -
-        str = str.replace(/[−–—]/g, '-');
+        // Limpiamos guiones tipográficos raros y espacios vacíos después del menos
+        str = str.replace(/[−–—]/g, '-').replace(/-\s+/g, '-');
         
-        // 4. Si después de limpiar aún contiene letras (no es número), retornar 0
-        if (/[a-zA-Z]/i.test(str)) return 0;
-        
-        // 5. Separar parte entera y decimal detectando el separador decimal correcto
-        // Se asume que el último punto o coma que tenga 1 o 2 dígitos después es decimal
-        let decimalSeparator = '';
-        let lastComma = str.lastIndexOf(',');
-        let lastDot = str.lastIndexOf('.');
-        
-        if (lastComma > lastDot && lastComma !== -1) {
-            // Formato europeo: 1.234,56
-            let parts = str.split(',');
-            if (parts.length === 2 && parts[1].length <= 2) {
-                decimalSeparator = ',';
-                str = str.replace(/\./g, '').replace(',', '.');
-            } else {
-                // Comas como separadores de miles
-                str = str.replace(/,/g, '');
-            }
-        } else if (lastDot > lastComma && lastDot !== -1) {
-            // Formato americano: 1,234.56
-            let parts = str.split('.');
-            if (parts.length === 2 && parts[1].length <= 2) {
-                decimalSeparator = '.';
-                str = str.replace(/,/g, '');
-            } else {
-                // Puntos como separadores de miles (formato extraño)
-                str = str.replace(/\./g, '');
-            }
+        // Si por error de limpieza quedó un punto antes del signo negativo (ej: .-412.00)
+        str = str.replace(/^\.-/, '-');
+
+        // REGLA DE ORO DE SHEETS: Si todavía quedan letras, Sheets lo considera texto y suma 0.
+        if (/[a-zA-Z]/.test(str)) {
+            return 0; 
+        }
+
+        const lastComma = str.lastIndexOf(',');
+        const lastDot = str.lastIndexOf('.');
+
+        // Manejo automático de formatos de miles y decimales
+        if (lastComma > lastDot && lastComma !== -1 && lastDot !== -1) {
+            str = str.replace(/\./g, '').replace(',', '.'); // EU: 1.234,50
+        } else if (lastDot > lastComma && lastDot !== -1 && lastComma !== -1) {
+            str = str.replace(/,/g, ''); // US: 1,234.50
         } else if (lastComma !== -1 && lastDot === -1) {
-            // Solo una coma: puede ser decimal (ej: 123,45) o miles (123,456)
             let parts = str.split(',');
-            if (parts.length === 2 && parts[1].length <= 2 && !isNaN(Number(parts[1]))) {
-                str = str.replace(',', '.');
+            if (parts[parts.length - 1].length <= 2) {
+                str = str.replace(',', '.'); // EU mixto corto
             } else {
-                str = str.replace(/,/g, '');
+                str = str.replace(/,/g, ''); // Miles puros
             }
         }
-        
-        // Limpiar cualquier punto que haya quedado como separador de miles (ej: "1.234")
-        if ((str.match(/\./g) || []).length > 1) {
-            str = str.replace(/\./g, '');
-        }
-        
-        // Conversión final
+
+        // Conversión matemática estricta
         const num = Number(str);
         return isNaN(num) ? 0 : num;
     }
@@ -138,12 +112,8 @@
     }
 
     function aplicarFiltroMes(monthYear) {
-        const { start, end } = getMonthRange(monthYear); 
-        globalStartDate = start; 
-        globalEndDate = end; 
-        normalizeAllData();
-        const activeModuloLi = document.querySelector('#listaModulos li.active'); 
-        window.cambiarModulo(currentModule, activeModuloLi);
+        const { start, end } = getMonthRange(monthYear); globalStartDate = start; globalEndDate = end; normalizeAllData();
+        const activeModuloLi = document.querySelector('#listaModulos li.active'); window.cambiarModulo(currentModule, activeModuloLi);
         const currentIdCliente = document.getElementById('detalleDocCliente').dataset.id;
         if (currentModule === 'busqueda' && currentIdCliente) { mostrarDetalleCliente(currentIdCliente); }
     }
@@ -157,6 +127,7 @@
         }
     }
 
+    // BUSCADOR ESTRICTO: Solo aceptará la columna si se llama EXACTAMENTE igual a los headers de tu Excel
     function findColumnExact(obj, options) {
         if (!obj) return null;
         const keys = Object.keys(obj);
@@ -170,19 +141,13 @@
 
     function initColumns() {
         if (data.vendedoresRaw.length) {
-            cols.vendedores = { 
-                id: findColumnExact(data.vendedoresRaw[0], ['ID_VENDEDOR']), 
-                nombre: findColumnExact(data.vendedoresRaw[0], ['NOMBRE']), 
-                apellido: findColumnExact(data.vendedoresRaw[0], ['APELLIDO']), 
-                meta: findColumnExact(data.vendedoresRaw[0], ['META']), 
-                tipo: findColumnExact(data.vendedoresRaw[0], ['TIPO']) 
-            };
+            cols.vendedores = { id: findColumnExact(data.vendedoresRaw[0], ['ID_VENDEDOR']), nombre: findColumnExact(data.vendedoresRaw[0], ['NOMBRE']), apellido: findColumnExact(data.vendedoresRaw[0], ['APELLIDO']), meta: findColumnExact(data.vendedoresRaw[0], ['META']), tipo: findColumnExact(data.vendedoresRaw[0], ['TIPO']) };
         }
         if (data.ventasRaw.length) {
             cols.ventas = {
                 idVendedor: findColumnExact(data.ventasRaw[0], ['ID_VENDEDOR']),
                 idCliente: findColumnExact(data.ventasRaw[0], ['ID_CLIENTE']),
-                total: findColumnExact(data.ventasRaw[0], ['PRECIO TOTAL']),
+                total: findColumnExact(data.ventasRaw[0], ['PRECIO TOTAL']), // Foco láser en PRECIO TOTAL
                 fecha: findColumnExact(data.ventasRaw[0], ['FECHA DE VENTA']),
                 documento: findColumnExact(data.ventasRaw[0], ['Documento_Numero']),
                 razon: findColumnExact(data.ventasRaw[0], ['RAZÓN SOCIAL']),
@@ -190,146 +155,81 @@
             };
         }
         if (data.productosRaw.length) {
-            cols.productos = { 
-                idVendedor: findColumnExact(data.productosRaw[0], ['ID_VENDEDOR']), 
-                idCliente: findColumnExact(data.productosRaw[0], ['ID_CLIENTE']), 
-                documento: findColumnExact(data.productosRaw[0], ['Documento_Numero']), 
-                producto: findColumnExact(data.productosRaw[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']), 
-                unid: findColumnExact(data.productosRaw[0], ['CANTIDAD UNID']), 
-                caja: findColumnExact(data.productosRaw[0], ['CANTIDAD CAJA']), 
-                fecha: findColumnExact(data.productosRaw[0], ['FECHA DE VENTA']) 
-            };
+            cols.productos = { idVendedor: findColumnExact(data.productosRaw[0], ['ID_VENDEDOR']), idCliente: findColumnExact(data.productosRaw[0], ['ID_CLIENTE']), documento: findColumnExact(data.productosRaw[0], ['Documento_Numero']), producto: findColumnExact(data.productosRaw[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']), unid: findColumnExact(data.productosRaw[0], ['CANTIDAD UNID']), caja: findColumnExact(data.productosRaw[0], ['CANTIDAD CAJA']), fecha: findColumnExact(data.productosRaw[0], ['FECHA DE VENTA']) };
         }
         if (data.clientesRaw.length) {
-            cols.clientes = { 
-                id: findColumnExact(data.clientesRaw[0], ['ID_CLIENTE']), 
-                documento: findColumnExact(data.clientesRaw[0], ['Documento_Numero']), 
-                razon: findColumnExact(data.clientesRaw[0], ['RAZÓN SOCIAL']), 
-                ubicacion: findColumnExact(data.clientesRaw[0], ['UBICACIÓN']), 
-                idVendedor: findColumnExact(data.clientesRaw[0], ['ID_VENDEDOR']), 
-                estado: findColumnExact(data.clientesRaw[0], ['ESTADO DE VENTA']) 
-            };
+            cols.clientes = { id: findColumnExact(data.clientesRaw[0], ['ID_CLIENTE']), documento: findColumnExact(data.clientesRaw[0], ['Documento_Numero']), razon: findColumnExact(data.clientesRaw[0], ['RAZÓN SOCIAL']), ubicacion: findColumnExact(data.clientesRaw[0], ['UBICACIÓN']), idVendedor: findColumnExact(data.clientesRaw[0], ['ID_VENDEDOR']), estado: findColumnExact(data.clientesRaw[0], ['ESTADO DE VENTA']) };
         }
     }
 
     function normalizeAllData() {
-        vendedoresMap.clear(); clientesMap.clear(); 
-        ventasPorVendedor.clear(); ventasPorCliente.clear();
-        productosPorVendedor.clear(); productosPorCliente.clear(); 
-        clientesPorVendedor.clear();
+        vendedoresMap.clear(); clientesMap.clear(); ventasPorVendedor.clear(); ventasPorCliente.clear();
+        productosPorVendedor.clear(); productosPorCliente.clear(); clientesPorVendedor.clear();
 
-        // Cargar vendedores
         for (const row of data.vendedoresRaw) {
-            const id = normalizeText(row[cols.vendedores.id]); 
-            if (!id) continue;
-            const meta = parseNumber(row[cols.vendedores.meta]); 
-            const nombre = row[cols.vendedores.nombre] || ''; 
-            const apellido = row[cols.vendedores.apellido] || ''; 
-            const tipo = normalizeText(row[cols.vendedores.tipo]);
+            const id = normalizeText(row[cols.vendedores.id]); if (!id) continue;
+            const meta = parseNumber(row[cols.vendedores.meta]); const nombre = row[cols.vendedores.nombre] || ''; const apellido = row[cols.vendedores.apellido] || ''; const tipo = normalizeText(row[cols.vendedores.tipo]);
             vendedoresMap.set(id, { id, nombreCompleto: `${nombre} ${apellido}`.trim(), meta, tipo, raw: row });
         }
 
-        // Cargar clientes y mapear por documento
         for (const row of data.clientesRaw) {
-            const id = normalizeText(row[cols.clientes.id]); 
-            if (!id) continue;
-            const documento = row[cols.clientes.documento] || ''; 
-            const razon = row[cols.clientes.razon] || ''; 
-            const ubicacion = row[cols.clientes.ubicacion] || ''; 
-            const idVendedor = normalizeText(row[cols.clientes.idVendedor]); 
-            const estado = normalizeText(row[cols.clientes.estado]);
+            const id = normalizeText(row[cols.clientes.id]); if (!id) continue;
+            const documento = row[cols.clientes.documento] || ''; const razon = row[cols.clientes.razon] || ''; const ubicacion = row[cols.clientes.ubicacion] || ''; const idVendedor = normalizeText(row[cols.clientes.idVendedor]); const estado = normalizeText(row[cols.clientes.estado]);
             clientesMap.set(id, { id, documento, razon, ubicacion, idVendedor, estado });
-            if (idVendedor) { 
-                if (!clientesPorVendedor.has(idVendedor)) clientesPorVendedor.set(idVendedor, []); 
-                clientesPorVendedor.get(idVendedor).push(id); 
-            }
+            if (idVendedor) { if (!clientesPorVendedor.has(idVendedor)) clientesPorVendedor.set(idVendedor, []); clientesPorVendedor.get(idVendedor).push(id); }
         }
 
-        // Mapa documento -> ID cliente (para ventas que solo traen Documento_Numero)
         const docToId = new Map();
-        for (const [id, cli] of clientesMap.entries()) { 
-            if (cli.documento) docToId.set(normalizeText(cli.documento), id); 
-        }
+        for (const [id, cli] of clientesMap.entries()) { if (cli.documento) docToId.set(normalizeText(cli.documento), id); }
 
         let maxDate = null;
-        // Usaremos un Set para evitar duplicados por (idVendedor, idCliente, documento, total, fecha)
-        const ventasSet = new Set();
-        
-        // Procesar ventas (el núcleo de las sumas)
         for (const row of data.ventasRaw) {
             if (!row[cols.ventas.idVendedor] || !row[cols.ventas.idCliente]) continue;
 
             let total = parseNumber(row[cols.ventas.total]);
-            
-            // Aplicar reglas contables según TIPO DE VENTA
+            if (total === 0) continue; 
+
+            // REGLAS CONTABLES FINALES
             if (cols.ventas.tipo) {
                 const tipoVenta = normalizeText(row[cols.ventas.tipo]);
-                // Notas de Crédito, Anulaciones, Devoluciones (excepto si es Nota de Venta)
-                if ((tipoVenta.includes('CREDITO') || tipoVenta.includes('ANULAD') || tipoVenta.includes('DEVOL')) && !tipoVenta.includes('NOTA DE VENTA')) {
-                    total = -Math.abs(total);
+
+                // Restar Notas de Crédito, Anulaciones y Devoluciones, pero evitar que "Nota de Venta" se reste
+                if (( tipoVenta.includes('CREDITO') || tipoVenta.includes('ANULAD') || tipoVenta.includes('DEVOL')) && !tipoVenta.includes('NOTA DE VENTA')) {
+                    total = -Math.abs(total); 
                 }
             }
 
-            // Si después de todo es 0, saltar (no aporta)
-            if (total === 0) continue;
+            const fechaRaw = row[cols.ventas.fecha]; const fechaObj = parseDateStrict(fechaRaw);
 
-            const fechaRaw = row[cols.ventas.fecha]; 
-            const fechaObj = parseDateStrict(fechaRaw);
-
-            // Filtro por fecha global (mes seleccionado)
             if (globalStartDate || globalEndDate) {
                 if (!fechaObj) continue; 
                 if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
                 if (globalEndDate && fechaObj.fullDate > globalEndDate) continue;
             }
 
-            const idVendedor = normalizeText(row[cols.ventas.idVendedor]); 
-            let idCliente = normalizeText(row[cols.ventas.idCliente]);
-            const documento = normalizeText(row[cols.ventas.documento]); 
-            const razon = row[cols.ventas.razon] || '';
+            const idVendedor = normalizeText(row[cols.ventas.idVendedor]); let idCliente = normalizeText(row[cols.ventas.idCliente]);
+            const documento = normalizeText(row[cols.ventas.documento]); const razon = row[cols.ventas.razon] || '';
 
-            // Si no hay ID de cliente pero tenemos documento, buscar en el mapa
-            if (!idCliente && documento && docToId.has(documento)) { 
-                idCliente = docToId.get(documento); 
-            }
-
-            // Crear clave única para evitar duplicados (previene errores por filas repetidas en CSV)
-// Usar la fecha normalizada (string "dd/mm") para evitar duplicados por formato
-const fechaNormalizada = fechaObj ? fechaObj.string : 'sin_fecha';
-const uniqueKey = `${idVendedor}|${idCliente}|${documento}|${total}|${fechaNormalizada}`;            if (ventasSet.has(uniqueKey)) continue;
-            ventasSet.add(uniqueKey);
+            if (!idCliente && documento && docToId.has(documento)) { idCliente = docToId.get(documento); }
 
             const ventaNorm = { idVendedor, idCliente, total, fechaObj, razon };
 
-            if (idVendedor) { 
-                if (!ventasPorVendedor.has(idVendedor)) ventasPorVendedor.set(idVendedor, []); 
-                ventasPorVendedor.get(idVendedor).push(ventaNorm); 
-            }
-            if (idCliente) { 
-                if (!ventasPorCliente.has(idCliente)) ventasPorCliente.set(idCliente, []); 
-                ventasPorCliente.get(idCliente).push(ventaNorm); 
-            }
-            if (fechaObj && fechaObj.fullDate) { 
-                if (!maxDate || fechaObj.fullDate > maxDate) maxDate = fechaObj.fullDate; 
-            }
+            if (idVendedor) { if (!ventasPorVendedor.has(idVendedor)) ventasPorVendedor.set(idVendedor, []); ventasPorVendedor.get(idVendedor).push(ventaNorm); }
+            if (idCliente) { if (!ventasPorCliente.has(idCliente)) ventasPorCliente.set(idCliente, []); ventasPorCliente.get(idCliente).push(ventaNorm); }
+            if (fechaObj && fechaObj.fullDate) { if (!maxDate || fechaObj.fullDate > maxDate) maxDate = fechaObj.fullDate; }
         }
         
         lastSaleDate = maxDate;
         if (lastSaleDate) {
             const formatted = lastSaleDate.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-            const sidebarElem = document.getElementById('fechaUltimaVentaSidebar'); 
-            const titleElem = document.getElementById('fechaUltimaVentaTitulo');
-            if (sidebarElem) sidebarElem.textContent = `Última venta: ${formatted}`; 
-            if (titleElem) titleElem.textContent = `Última venta: ${formatted}`;
+            const sidebarElem = document.getElementById('fechaUltimaVentaSidebar'); const titleElem = document.getElementById('fechaUltimaVentaTitulo');
+            if (sidebarElem) sidebarElem.textContent = `Última venta: ${formatted}`; if (titleElem) titleElem.textContent = `Última venta: ${formatted}`;
         }
 
-        // Procesar productos (sin cambios mayores, solo filtro de fecha y evitar duplicados)
-        const productosSet = new Set();
         for (const row of data.productosRaw) {
             if (!row[cols.productos.idVendedor] || !row[cols.productos.idCliente]) continue;
 
-            const fechaRawProd = cols.productos.fecha ? row[cols.productos.fecha] : null; 
-            let fechaObj = parseDateStrict(fechaRawProd);
+            const fechaRawProd = cols.productos.fecha ? row[cols.productos.fecha] : null; let fechaObj = parseDateStrict(fechaRawProd);
 
             if (globalStartDate || globalEndDate) {
                 if (!fechaObj) continue;
@@ -337,31 +237,16 @@ const uniqueKey = `${idVendedor}|${idCliente}|${documento}|${total}|${fechaNorma
                 if (globalEndDate && fechaObj.fullDate > globalEndDate) continue;
             }
 
-            const idVendedor = normalizeText(row[cols.productos.idVendedor]); 
-            let idCliente = normalizeText(row[cols.productos.idCliente]);
-            const documento = normalizeText(row[cols.productos.documento]); 
-            const producto = row[cols.productos.producto] || '';
-            const unid = parseNumber(row[cols.productos.unid]); 
-            const caja = parseNumber(row[cols.productos.caja]);
+            const idVendedor = normalizeText(row[cols.productos.idVendedor]); let idCliente = normalizeText(row[cols.productos.idCliente]);
+            const documento = normalizeText(row[cols.productos.documento]); const producto = row[cols.productos.producto] || '';
+            const unid = parseNumber(row[cols.productos.unid]); const caja = parseNumber(row[cols.productos.caja]);
 
-            if (!idCliente && documento && docToId.has(documento)) { 
-                idCliente = docToId.get(documento); 
-            }
-
-            const prodKey = `${idVendedor}|${idCliente}|${documento}|${producto}|${unid}|${caja}|${fechaRawProd}`;
-            if (productosSet.has(prodKey)) continue;
-            productosSet.add(prodKey);
+            if (!idCliente && documento && docToId.has(documento)) { idCliente = docToId.get(documento); }
 
             const prodNorm = { producto, unid, caja, fechaObj };
 
-            if (idVendedor) { 
-                if (!productosPorVendedor.has(idVendedor)) productosPorVendedor.set(idVendedor, []); 
-                productosPorVendedor.get(idVendedor).push(prodNorm); 
-            }
-            if (idCliente) { 
-                if (!productosPorCliente.has(idCliente)) productosPorCliente.set(idCliente, []); 
-                productosPorCliente.get(idCliente).push(prodNorm); 
-            }
+            if (idVendedor) { if (!productosPorVendedor.has(idVendedor)) productosPorVendedor.set(idVendedor, []); productosPorVendedor.get(idVendedor).push(prodNorm); }
+            if (idCliente) { if (!productosPorCliente.has(idCliente)) productosPorCliente.set(idCliente, []); productosPorCliente.get(idCliente).push(prodNorm); }
         }
     }
 
@@ -369,10 +254,8 @@ const uniqueKey = `${idVendedor}|${idCliente}|${documento}|${total}|${fechaNorma
         const mesValue = document.getElementById('filtroMes').value;
         if (mesValue) { aplicarFiltroMes(mesValue); } 
         else {
-            globalStartDate = null; globalEndDate = null; 
-            normalizeAllData();
-            const activeModuloLi = document.querySelector('#listaModulos li.active'); 
-            window.cambiarModulo(currentModule, activeModuloLi);
+            globalStartDate = null; globalEndDate = null; normalizeAllData();
+            const activeModuloLi = document.querySelector('#listaModulos li.active'); window.cambiarModulo(currentModule, activeModuloLi);
             const currentIdCliente = document.getElementById('detalleDocCliente').dataset.id;
             if (currentModule === 'busqueda' && currentIdCliente) { mostrarDetalleCliente(currentIdCliente); }
         }
@@ -409,7 +292,7 @@ const uniqueKey = `${idVendedor}|${idCliente}|${documento}|${total}|${fechaNorma
         const ventasPorClienteMap = new Map();
         for (const [cliId, ventas] of ventasPorCliente.entries()) {
             const total = ventas.reduce((sum, v) => sum + v.total, 0);
-            if (total !== 0) ventasPorClienteMap.set(cliId, total);
+            if (total > 0) ventasPorClienteMap.set(cliId, total);
         }
 
         for (const cliId of clientIds) {
@@ -606,8 +489,8 @@ const uniqueKey = `${idVendedor}|${idCliente}|${documento}|${total}|${fechaNorma
             }
             const total = results.length; const shown = results.slice(0, 15); let html = '';
             for (const r of shown) {
-                const totalComp = (ventasPorCliente.get(r.id) || []).reduce((s, v) => s + v.total, 0);
-                html += `<li onclick="window.seleccionarSugerencia('${r.id}', '${(r.doc||'').replace(/'/g,"\\'")}', '${(r.razon||'').replace(/'/g,"\\'")}')"><strong>${r.razon || 'Sin Razón Social'}</strong><small>Doc: ${r.doc || '---'} &nbsp;|&nbsp; Comprado: ${formatCurrency(totalComp)}</small></li>`;
+                const total = (ventasPorCliente.get(r.id) || []).reduce((s, v) => s + v.total, 0);
+                html += `<li onclick="window.seleccionarSugerencia('${r.id}', '${(r.doc||'').replace(/'/g,"\\'")}', '${(r.razon||'').replace(/'/g,"\\'")}')"><strong>${r.razon || 'Sin Razón Social'}</strong><small>Doc: ${r.doc || '---'} &nbsp;|&nbsp; Comprado: ${formatCurrency(total)}</small></li>`;
             }
             if (total > 15) { html += `<li class="ver-todos-item" onclick="window.abrirModalVerTodos('${texto.replace(/'/g,"\\'")}')"><strong style="color:#1a73e8;">Ver todos los ${total} resultados →</strong></li>`; }
             if (!html) html = '<li style="color:#999; text-align:center; padding:15px;">No se encontraron resultados</li>';
