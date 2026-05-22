@@ -188,7 +188,7 @@
                 const tipoVenta = normalizeText(row[cols.ventas.tipo]);
 
                 // Restar Notas de Crédito, Anulaciones y Devoluciones, pero evitar que "Nota de Venta" se reste
-                if ((tipoVenta.includes('NC') || tipoVenta.includes('CREDITO') || tipoVenta.includes('ANULAD') || tipoVenta.includes('DEVOL')) && !tipoVenta.includes('NOTA DE VENTA')) {
+                if (( tipoVenta.includes('CREDITO') || tipoVenta.includes('ANULAD') || tipoVenta.includes('DEVOL')) && !tipoVenta.includes('NOTA DE VENTA')) {
                     total = -Math.abs(total); 
                 }
             }
