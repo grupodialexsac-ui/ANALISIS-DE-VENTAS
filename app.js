@@ -8,47 +8,40 @@
         clientes: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ70FuTF7cerHOQSNXrIcLFDFRprfHAV728CeKLsmNZdlxq3rA_SunZ6ILxYFtZVHVfQdphUycfNbUC/pub?gid=1344644608&single=true&output=csv'
     };
 
-    // --- Estado global interno ---
-    let data = {
-        vendedoresRaw: [],
-        ventasRaw: [],
-        productosRaw: [],
-        clientesRaw: []
-    };
+    let data = { vendedoresRaw: [], ventasRaw: [], productosRaw: [], clientesRaw: [] };
+    let globalStartDate = null;
+    let globalEndDate = null;
 
-    // Datos normalizados (índices)
-    let vendedoresMap = new Map(); // id -> objeto normalizado
-    let clientesMap = new Map();   // id -> objeto normalizado
-    let ventasPorVendedor = new Map(); // idVendedor -> array de ventas normalizadas
-    let ventasPorCliente = new Map();   // idCliente -> array de ventas normalizadas
-    let productosPorVendedor = new Map(); // idVendedor -> array de productos normalizados
-    let productosPorCliente = new Map();  // idCliente -> array de productos normalizados
-    let clientesPorVendedor = new Map();   // idVendedor -> array de ids de clientes
-    let lastSaleDate = null; // fecha de última venta (objeto Date)
+    let vendedoresMap = new Map();
+    let clientesMap = new Map();
+    let ventasPorVendedor = new Map();
+    let ventasPorCliente = new Map();
+    let productosPorVendedor = new Map();
+    let productosPorCliente = new Map();
+    let clientesPorVendedor = new Map();
+    let lastSaleDate = null;
 
-    // Configuración de columnas (se llena después de cargar raw)
-    let cols = {
-        vendedores: {},
-        ventas: {},
-        productos: {},
-        clientes: {}
-    };
-
-    // Instancias de Chart.js y mapas
+    let cols = { vendedores: {}, ventas: {}, productos: {}, clientes: {} };
     let charts = {};
     let mapInstances = {};
-
-    // UI state
     let currentModule = 'general';
     let currentVendedor = null;
 
-    // --- Funciones auxiliares ---
     function normalizeText(t) {
         return t ? String(t).replace(/\s+/g, ' ').trim().toUpperCase() : '';
     }
 
     function parseNumber(val) {
-        const num = parseFloat(String(val ?? '').replace(/,/g, ''));
+        if (val === undefined || val === null) return 0;
+        const str = String(val).trim();
+        if (str === '') return 0;
+        // Elimina cualquier coma (separador de miles) y reemplaza coma decimal por punto si es necesario
+        let cleaned = str.replace(/,/g, '');
+        // Si después de limpiar comas aún hay una coma (como decimal), la cambiamos a punto
+        if (cleaned.includes(',')) {
+            cleaned = cleaned.replace(/,/g, '.');
+        }
+        const num = parseFloat(cleaned);
         return isNaN(num) ? 0 : num;
     }
 
@@ -56,7 +49,6 @@
         return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(val || 0);
     }
 
-    // Parseo de fecha estricto, devuelve objeto { string: "DD/MM", sortValue: timestamp } o null
     function parseDateStrict(dateStr) {
         if (!dateStr) return null;
         const base = String(dateStr).split(' ')[0].trim();
@@ -87,7 +79,39 @@
         return { string: `${day}/${month}`, sortValue: fecha.getTime(), fullDate: fecha };
     }
 
-    // Carga CSV con reintento
+    function getMonthRange(monthYear) {
+        if (!monthYear) return { start: null, end: null };
+        const [year, month] = monthYear.split('-').map(Number);
+        const start = new Date(year, month - 1, 1);
+        const end = new Date(year, month, 0);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+    }
+
+    function initMonthFilter() {
+        const inputMes = document.getElementById('filtroMes');
+        if (!inputMes) return;
+        const hoy = new Date();
+        const year = hoy.getFullYear();
+        const month = String(hoy.getMonth() + 1).padStart(2, '0');
+        const mesActual = `${year}-${month}`;
+        inputMes.value = mesActual;
+        aplicarFiltroMes(mesActual);
+    }
+
+    function aplicarFiltroMes(monthYear) {
+        const { start, end } = getMonthRange(monthYear);
+        globalStartDate = start;
+        globalEndDate = end;
+        normalizeAllData();
+        const activeModuloLi = document.querySelector('#listaModulos li.active');
+        window.cambiarModulo(currentModule, activeModuloLi);
+        const currentIdCliente = document.getElementById('detalleDocCliente').dataset.id;
+        if (currentModule === 'busqueda' && currentIdCliente) {
+            mostrarDetalleCliente(currentIdCliente);
+        }
+    }
+
     async function loadCSV(url, retries = 2) {
         for (let i = 0; i <= retries; i++) {
             try {
@@ -108,7 +132,6 @@
         }
     }
 
-    // Encontrar nombre de columna por coincidencia
     function findColumn(obj, options) {
         if (!obj) return null;
         const keys = Object.keys(obj);
@@ -125,7 +148,6 @@
         return keys[0] || null;
     }
 
-    // Inicializar columnas después de cargar raw data
     function initColumns() {
         if (data.vendedoresRaw.length) {
             cols.vendedores = {
@@ -153,7 +175,8 @@
                 documento: findColumn(data.productosRaw[0], ['Documento_Numero', 'RUC', 'DNI']),
                 producto: findColumn(data.productosRaw[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']),
                 unid: findColumn(data.productosRaw[0], ['CANTIDAD UNID', 'UNID']),
-                caja: findColumn(data.productosRaw[0], ['CANTIDAD CAJA', 'CAJA'])
+                caja: findColumn(data.productosRaw[0], ['CANTIDAD CAJA', 'CAJA']),
+                fecha: findColumn(data.productosRaw[0], ['FECHA DE VENTA', 'FECHA', 'FECHA_EMISION', 'FECHA EMISION'])
             };
         }
         if (data.clientesRaw.length) {
@@ -168,9 +191,60 @@
         }
     }
 
-    // Normalización completa de todos los datos (se ejecuta una sola vez)
+    // --- NUEVA FUNCIÓN: Deduplicar ventas por número de documento (factura) ---
+    function deduplicateSales(rows, docToIdMap) {
+        const invoiceMap = new Map(); // key: documento + idVendedor + idCliente + fechaStr
+        const duplicatesCount = { totalRows: rows.length, uniqueInvoices: 0 };
+
+        for (const row of rows) {
+            const fechaRaw = row[cols.ventas.fecha];
+            let fechaObj = parseDateStrict(fechaRaw);
+            // Aplicar filtro de fechas global (por si se llama desde fuera de normalizeAllData)
+            if (globalStartDate || globalEndDate) {
+                if (!fechaObj) continue;
+                if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
+                if (globalEndDate && fechaObj.fullDate > globalEndDate) continue;
+            }
+
+            const idVendedor = normalizeText(row[cols.ventas.idVendedor]);
+            let idCliente = normalizeText(row[cols.ventas.idCliente]);
+            const documentoRaw = row[cols.ventas.documento];
+            const documento = normalizeText(documentoRaw);
+            const total = parseNumber(row[cols.ventas.total]);
+            const razon = row[cols.ventas.razon] || '';
+
+            if (!idCliente && documento && docToIdMap.has(documento)) {
+                idCliente = docToIdMap.get(documento);
+            }
+
+            // Si no hay documento, usamos una combinación de fecha+idVendedor+idCliente como clave
+            const keyParts = [
+                documento || 'NO_DOC',
+                idVendedor || 'NO_VEND',
+                idCliente || 'NO_CLI',
+                fechaObj ? fechaObj.fullDate.toISOString().split('T')[0] : 'NO_DATE'
+            ];
+            const key = keyParts.join('|');
+
+            if (!invoiceMap.has(key) && total > 0) {
+                // Guardamos la primera ocurrencia como la venta única
+                invoiceMap.set(key, {
+                    idVendedor,
+                    idCliente,
+                    total,
+                    fechaObj,
+                    razon,
+                    documento
+                });
+            }
+        }
+
+        duplicatesCount.uniqueInvoices = invoiceMap.size;
+        console.log(`[Dedupe] Filas originales: ${duplicatesCount.totalRows}, Facturas únicas: ${duplicatesCount.uniqueInvoices}`);
+        return Array.from(invoiceMap.values());
+    }
+
     function normalizeAllData() {
-        // Limpiar mapas
         vendedoresMap.clear();
         clientesMap.clear();
         ventasPorVendedor.clear();
@@ -179,7 +253,7 @@
         productosPorCliente.clear();
         clientesPorVendedor.clear();
 
-        // 1. Normalizar vendedores
+        // 1. Vendedores
         for (const row of data.vendedoresRaw) {
             const id = normalizeText(row[cols.vendedores.id]);
             if (!id) continue;
@@ -187,16 +261,10 @@
             const nombre = row[cols.vendedores.nombre] || '';
             const apellido = row[cols.vendedores.apellido] || '';
             const tipo = normalizeText(row[cols.vendedores.tipo]);
-            vendedoresMap.set(id, {
-                id,
-                nombreCompleto: `${nombre} ${apellido}`.trim(),
-                meta,
-                tipo,
-                raw: row
-            });
+            vendedoresMap.set(id, { id, nombreCompleto: `${nombre} ${apellido}`.trim(), meta, tipo, raw: row });
         }
 
-        // 2. Normalizar clientes y construir índice por vendedor
+        // 2. Clientes
         for (const row of data.clientesRaw) {
             const id = normalizeText(row[cols.clientes.id]);
             if (!id) continue;
@@ -205,64 +273,39 @@
             const ubicacion = row[cols.clientes.ubicacion] || '';
             const idVendedor = normalizeText(row[cols.clientes.idVendedor]);
             const estado = normalizeText(row[cols.clientes.estado]);
-            const clienteNorm = {
-                id,
-                documento,
-                razon,
-                ubicacion,
-                idVendedor,
-                estado
-            };
-            clientesMap.set(id, clienteNorm);
+            clientesMap.set(id, { id, documento, razon, ubicacion, idVendedor, estado });
             if (idVendedor) {
                 if (!clientesPorVendedor.has(idVendedor)) clientesPorVendedor.set(idVendedor, []);
                 clientesPorVendedor.get(idVendedor).push(id);
             }
         }
 
-        // Mapa auxiliar: documento -> idCliente
         const docToId = new Map();
         for (const [id, cli] of clientesMap.entries()) {
             if (cli.documento) docToId.set(normalizeText(cli.documento), id);
         }
 
-        // 3. Normalizar ventas
+        // 3. Ventas DEDUPLICADAS y con filtro de fecha
+        const uniqueSales = deduplicateSales(data.ventasRaw, docToId);
         let maxDate = null;
-        for (const row of data.ventasRaw) {
-            const idVendedor = normalizeText(row[cols.ventas.idVendedor]);
-            let idCliente = normalizeText(row[cols.ventas.idCliente]);
-            const documento = normalizeText(row[cols.ventas.documento]);
-            const total = parseNumber(row[cols.ventas.total]);
-            const fechaRaw = row[cols.ventas.fecha];
-            const fechaObj = parseDateStrict(fechaRaw);
-            const razon = row[cols.ventas.razon] || '';
-
-            if (!idCliente && documento && docToId.has(documento)) {
-                idCliente = docToId.get(documento);
-            }
-
-            const ventaNorm = {
-                idVendedor,
-                idCliente,
-                total,
-                fechaObj,
-                razon
-            };
+        for (const venta of uniqueSales) {
+            const { idVendedor, idCliente, total, fechaObj, razon } = venta;
+            if (!idVendedor && !idCliente) continue;
 
             if (idVendedor) {
                 if (!ventasPorVendedor.has(idVendedor)) ventasPorVendedor.set(idVendedor, []);
-                ventasPorVendedor.get(idVendedor).push(ventaNorm);
+                ventasPorVendedor.get(idVendedor).push({ idVendedor, idCliente, total, fechaObj, razon });
             }
             if (idCliente) {
                 if (!ventasPorCliente.has(idCliente)) ventasPorCliente.set(idCliente, []);
-                ventasPorCliente.get(idCliente).push(ventaNorm);
+                ventasPorCliente.get(idCliente).push({ idVendedor, idCliente, total, fechaObj, razon });
             }
 
-            // Actualizar última fecha de venta
             if (fechaObj && fechaObj.fullDate) {
                 if (!maxDate || fechaObj.fullDate > maxDate) maxDate = fechaObj.fullDate;
             }
         }
+
         lastSaleDate = maxDate;
         if (lastSaleDate) {
             const formatted = lastSaleDate.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -272,8 +315,16 @@
             if (titleElem) titleElem.textContent = `Última venta: ${formatted}`;
         }
 
-        // 4. Normalizar productos
+        // 4. Productos (también aplicamos filtro de fecha, pero sin deduplicar porque se suman cantidades)
         for (const row of data.productosRaw) {
+            const fechaRawProd = cols.productos.fecha ? row[cols.productos.fecha] : null;
+            let fechaObj = parseDateStrict(fechaRawProd);
+            if (globalStartDate || globalEndDate) {
+                if (!fechaObj) continue;
+                if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
+                if (globalEndDate && fechaObj.fullDate > globalEndDate) continue;
+            }
+
             const idVendedor = normalizeText(row[cols.productos.idVendedor]);
             let idCliente = normalizeText(row[cols.productos.idCliente]);
             const documento = normalizeText(row[cols.productos.documento]);
@@ -285,7 +336,7 @@
                 idCliente = docToId.get(documento);
             }
 
-            const prodNorm = { producto, unid, caja };
+            const prodNorm = { producto, unid, caja, fechaObj };
 
             if (idVendedor) {
                 if (!productosPorVendedor.has(idVendedor)) productosPorVendedor.set(idVendedor, []);
@@ -297,6 +348,17 @@
             }
         }
     }
+
+    // ... (el resto de las funciones permanecen igual: updateChart, renderMap, loadGeneralModule, loadProductividadModule, loadSituacionModule, etc.)
+    // Por brevedad, conserva todas las funciones que ya tenías desde 'updateChart' hasta el final.
+    // SOLO asegúrate de reemplazar la función normalizeAllData por la de arriba y añadir deduplicateSales.
+
+    // NOTA: El resto del código (desde updateChart hasta el final) se mantiene exactamente igual.
+    // A continuación copia todo lo que ya tenías después de normalizeAllData, sin cambios adicionales.
+    // ...
+
+    // Asegúrate de que la función aplicarFiltroFecha (window) y el resto de eventos sigan igual.
+
 
     // Obtener clientes inactivos (según estado en clientes)
     function getInactiveClients(vendedorId = 'GLOBAL') {
@@ -1080,3 +1142,4 @@
         }
     });
 })();
+
