@@ -1,4 +1,4 @@
-// Módulo principal con encapsulación y mejoras de rendimiento - VERSIÓN ANTIBALAS
+// Módulo principal con encapsulación y mejoras de rendimiento - VERSIÓN ANTIBALAS V2
 (function() {
     // --- URLs de datos ---
     const urls = {
@@ -46,25 +46,19 @@
         return t ? String(t).replace(/\s+/g, ' ').trim().toUpperCase() : '';
     }
 
-    // Lector de números a prueba de fallos (Maneja comas, puntos y formatos sucios)
     function parseNumber(val) {
         if (val === null || val === undefined || val === '') return 0;
         let str = String(val).trim();
-        
-        // Quitar símbolos de moneda, texto y espacios en blanco
         str = str.replace(/[S/$\sa-zA-Z]/g, '');
         
         const lastComma = str.lastIndexOf(',');
         const lastDot = str.lastIndexOf('.');
         
         if (lastComma > lastDot && lastComma !== -1 && lastDot !== -1) {
-            // Formato EU/Latam: 1.234.567,89
             str = str.replace(/\./g, '').replace(',', '.');
         } else if (lastDot > lastComma && lastDot !== -1 && lastComma !== -1) {
-            // Formato US: 1,234,567.89
             str = str.replace(/,/g, '');
         } else if (lastComma !== -1 && lastDot === -1) {
-            // Solo hay comas. Validamos si funciona como decimal o separador de miles
             let parts = str.split(',');
             if (parts[parts.length - 1].length <= 2) {
                 str = str.replace(',', '.'); 
@@ -81,29 +75,30 @@
         return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(val || 0);
     }
 
+    // Lector de fechas INTELIGENTE: Diferencia entre Día/Mes y Mes/Día automáticamente
     function parseDateStrict(dateStr) {
         if (!dateStr) return null;
-        const base = String(dateStr).split(' ')[0].trim();
-        let day, month, year;
-        if (base.includes('/')) {
-            const parts = base.split('/');
-            if (parts.length !== 3) return null;
-            if (parts[0].length === 4) {
-                year = parts[0]; month = parts[1]; day = parts[2];
+        let str = String(dateStr).split(' ')[0].trim();
+        let parts = str.split(/[-/]/);
+        if (parts.length !== 3) return null;
+
+        let year, month, day;
+        if (parts[0].length === 4) {
+            year = parts[0]; month = parts[1]; day = parts[2];
+        } else if (parts[2].length >= 2) {
+            year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+            // Deducción lógica para evitar el error "Invalid Date"
+            if (Number(parts[0]) > 12) {
+                day = parts[0]; month = parts[1]; // Definitivamente DD/MM/YYYY
+            } else if (Number(parts[1]) > 12) {
+                month = parts[0]; day = parts[1]; // Definitivamente MM/DD/YYYY
             } else {
-                day = parts[0]; month = parts[1]; year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
-            }
-        } else if (base.includes('-')) {
-            const parts = base.split('-');
-            if (parts.length !== 3) return null;
-            if (parts[0].length === 4) {
-                year = parts[0]; month = parts[1]; day = parts[2];
-            } else {
-                day = parts[0]; month = parts[1]; year = parts[2];
+                day = parts[0]; month = parts[1]; // Asumimos formato Perú (DD/MM) por defecto
             }
         } else {
             return null;
         }
+
         day = String(day).padStart(2, '0');
         month = String(month).padStart(2, '0');
         const fecha = new Date(`${year}-${month}-${day}T12:00:00`);
@@ -120,15 +115,15 @@
         return { start, end };
     }
 
-    function initMonthFilter() {
+    // Ya no aplica el filtro, solo prepara el input visualmente
+    function setMonthInputDefault() {
         const inputMes = document.getElementById('filtroMes');
-        if (!inputMes) return;
-        const hoy = new Date();
-        const year = hoy.getFullYear();
-        const month = String(hoy.getMonth() + 1).padStart(2, '0');
-        const mesActual = `${year}-${month}`;
-        inputMes.value = mesActual;
-        aplicarFiltroMes(mesActual);
+        if (inputMes) {
+            const hoy = new Date();
+            const year = hoy.getFullYear();
+            const month = String(hoy.getMonth() + 1).padStart(2, '0');
+            inputMes.value = `${year}-${month}`;
+        }
     }
 
     function aplicarFiltroMes(monthYear) {
@@ -166,7 +161,6 @@
         }
     }
 
-    // Buscador de columnas SEGURO. NUNCA retorna una columna al azar si falla.
     function findColumn(obj, options) {
         if (!obj) return null;
         const keys = Object.keys(obj);
@@ -180,7 +174,7 @@
             const found = keys.find(k => normalizeText(k).includes(normOpt));
             if (found) return found;
         }
-        return null; // Antes era "return keys[0]". Esto generaba las sumas erróneas.
+        return null;
     }
 
     function initColumns() {
@@ -197,7 +191,6 @@
             cols.ventas = {
                 idVendedor: findColumn(data.ventasRaw[0], ['ID_VENDEDOR', 'CODIGO VENDEDOR']),
                 idCliente: findColumn(data.ventasRaw[0], ['ID_CLIENTE', 'CODIGO CLIENTE']),
-                // BUSCAMOS ESTRICTAMENTE LA COLUMNA "PRECIO TOTAL" PARA NO DUPLICAR SUB-TOTALES
                 total: findColumn(data.ventasRaw[0], ['PRECIO TOTAL', 'PRECIO_TOTAL', 'IMPORTE LINEA']) || findColumn(data.ventasRaw[0], ['TOTAL']),
                 fecha: findColumn(data.ventasRaw[0], ['FECHA DE VENTA', 'FECHA']),
                 documento: findColumn(data.ventasRaw[0], ['Documento_Numero', 'RUC', 'DNI']),
@@ -227,7 +220,6 @@
         }
     }
 
-    // Normalización con Filtros Aplicados
     function normalizeAllData() {
         vendedoresMap.clear();
         clientesMap.clear();
@@ -237,7 +229,6 @@
         productosPorCliente.clear();
         clientesPorVendedor.clear();
 
-        // 1. Vendedores
         for (const row of data.vendedoresRaw) {
             const id = normalizeText(row[cols.vendedores.id]);
             if (!id) continue;
@@ -248,7 +239,6 @@
             vendedoresMap.set(id, { id, nombreCompleto: `${nombre} ${apellido}`.trim(), meta, tipo, raw: row });
         }
 
-        // 2. Clientes
         for (const row of data.clientesRaw) {
             const id = normalizeText(row[cols.clientes.id]);
             if (!id) continue;
@@ -269,20 +259,18 @@
             if (cli.documento) docToId.set(normalizeText(cli.documento), id);
         }
 
-        // 3. Ventas (Filtrado y limpieza robusta)
         let maxDate = null;
         for (const row of data.ventasRaw) {
-            // Evitar filas totalmente vacías (Ej. Resúmenes de tabla exportados)
             const isRowEmpty = !row[cols.ventas.total] && !row[cols.ventas.idVendedor] && !row[cols.ventas.idCliente];
             if (isRowEmpty) continue;
 
             const total = parseNumber(row[cols.ventas.total]);
-            if (total === 0) continue; // Si no hay monto, no suma.
+            if (total === 0) continue; 
 
             const fechaRaw = row[cols.ventas.fecha];
             const fechaObj = parseDateStrict(fechaRaw);
 
-            // APLICAR FILTRO GLOBAL (mes) - Si hay filtro y la fecha no entra, se omite
+            // SOLO DESCARTA si hay un filtro de fecha activo Y la fecha está fuera de rango o vacía
             if (globalStartDate || globalEndDate) {
                 if (!fechaObj) continue; 
                 if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
@@ -323,7 +311,6 @@
             if (titleElem) titleElem.textContent = `Última venta: ${formatted}`;
         }
 
-        // 4. Productos
         for (const row of data.productosRaw) {
             const fechaRawProd = cols.productos.fecha ? row[cols.productos.fecha] : null;
             let fechaObj = parseDateStrict(fechaRawProd);
@@ -358,7 +345,6 @@
         }
     }
 
-    // Activa el filtro por mes
     window.aplicarFiltroFecha = function() {
         const mesValue = document.getElementById('filtroMes').value;
         if (mesValue) {
@@ -397,7 +383,6 @@
         charts[chartId] = new Chart(canvas.getContext('2d'), config);
     }
 
-    // --- Mapas ---
     function destroyMap(containerId) {
         if (mapInstances[containerId]) {
             mapInstances[containerId].remove();
@@ -450,7 +435,6 @@
         }
     }
 
-    // --- Módulos de vista ---
     function loadGeneralModule() {
         if (!vendedoresMap.size) return;
         let metaTotal = 0;
@@ -655,7 +639,6 @@
         renderMap('ContenedorMapaSituacion', activeClientIds);
     }
 
-    // --- Exportar tabla ABC a PDF ---
     window.exportarTablaABC = async function() {
         const tablaOriginal = document.querySelector('#tablaABC');
         if (!tablaOriginal) {
@@ -763,7 +746,6 @@
         }
     };
 
-    // --- Fuse.js y Búsqueda ---
     let fuseInstance = null;
     let allSearchResults = [];
     let verTodosPage = 0;
@@ -1154,7 +1136,13 @@
             data.vendedoresRaw = vendedores; data.ventasRaw = ventas; data.productosRaw = productos; data.clientesRaw = clientes;
 
             initColumns();
-            initMonthFilter(); 
+            
+            // FIX: Ya no forzamos el filtrado estricto al inicio. 
+            // Esto permite que el sistema jale TODO el dinero de mayo, 
+            // incluso si la fila tiene la fecha en blanco o mal formateada.
+            setMonthInputDefault(); 
+            normalizeAllData();
+
             buildFuseIndex();
             generateVendedoresMenu();
 
