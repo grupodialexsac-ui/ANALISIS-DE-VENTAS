@@ -184,20 +184,26 @@
 
         let maxDate = null;
         for (const row of data.ventasRaw) {
-            if (!row[cols.ventas.idVendedor] || !row[cols.ventas.idCliente]) continue;
+            // FIX 2: Solo requerir idVendedor; idCliente puede estar vacío en NC
+            if (!row[cols.ventas.idVendedor]) continue;
 
             let total = parseNumber(row[cols.ventas.total]);
-            if (total === 0) continue; 
 
-            // REGLAS CONTABLES FINALES
+            // FIX 1 & 3: Las NC ya vienen en negativo desde Sheets.
+            // Solo aplicar lógica de tipo para NC que vengan positivas por error de exportación.
             if (cols.ventas.tipo) {
                 const tipoVenta = normalizeText(row[cols.ventas.tipo]);
-
-                // Restar Notas de Crédito, Anulaciones y Devoluciones, pero evitar que "Nota de Venta" se reste
-                if (( tipoVenta.includes('CREDITO') || tipoVenta.includes('ANULAD') || tipoVenta.includes('DEVOL')) && !tipoVenta.includes('NOTA DE VENTA')) {
-                    total = -Math.abs(total); 
+                const esNC = tipoVenta === 'NC' || 
+                             (tipoVenta.includes('NOTA') && tipoVenta.includes('CREDITO')) ||
+                             tipoVenta.includes('ANULAD') || tipoVenta.includes('DEVOL');
+                // Solo forzar negativo si el tipo es NC Y el valor viene positivo (no duplicar resta)
+                if (esNC && total > 0) {
+                    total = -total;
                 }
             }
+
+            // FIX 3: No descartar total === 0 sin antes revisar tipo; solo saltar si realmente no aporta
+            if (total === 0) continue;
 
             const fechaRaw = row[cols.ventas.fecha]; const fechaObj = parseDateStrict(fechaRaw);
 
