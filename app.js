@@ -1,4 +1,4 @@
-// Módulo principal con encapsulación y mejoras de rendimiento - VERSIÓN CORREGIDA SUMAS
+// Módulo principal con encapsulación y mejoras de rendimiento - VERSIÓN CORREGIDA (Sumas exactas)
 (function() {
     // --- URLs de datos ---
     const urls = {
@@ -23,17 +23,24 @@
         return t ? String(t).replace(/\s+/g, ' ').trim().toUpperCase() : '';
     }
 
-    // PARSER NUMÉRICO ROBUSTO (Perú: miles con coma, decimales con punto)
+    // PARSER NUMÉRICO DEFINITIVO (Maneja miles, decimales, símbolos, caracteres ocultos)
     function parseNumber(val) {
         if (val === null || val === undefined || val === '') return 0;
-        let str = String(val).trim();
+        
+        // Convertir a string y eliminar caracteres no imprimibles
+        let str = String(val)
+            .replace(/[\u200B-\u200D\uFEFF]/g, '') // eliminar zero-width spaces
+            .trim();
+        
+        if (str === '') return 0;
         
         // 1. Manejo de negativos contables: (150.00) -> -150.00
         if (str.startsWith('(') && str.endsWith(')')) {
             str = '-' + str.slice(1, -1).trim();
         }
         
-        // 2. Eliminar símbolos de moneda S/ , S/. , $
+        // 2. Eliminar símbolos de moneda S/ , S/. , $ y cualquier otro texto no numérico al inicio
+        str = str.replace(/^[^0-9\-\.\,]+/, ''); // elimina cualquier texto antes del primer número
         str = str.replace(/S\/\.?/gi, '').replace(/\$/g, '').trim();
         
         // 3. Reemplazar guiones raros por el estándar -
@@ -42,31 +49,48 @@
         // 4. Si después de limpiar aún contiene letras (no es número), retornar 0
         if (/[a-zA-Z]/i.test(str)) return 0;
         
-        // 5. Detectar formato de miles y decimales
-        const commaCount = (str.match(/,/g) || []).length;
-        const dotCount = (str.match(/\./g) || []).length;
+        // 5. Separar parte entera y decimal detectando el separador decimal correcto
+        // Se asume que el último punto o coma que tenga 1 o 2 dígitos después es decimal
+        let decimalSeparator = '';
+        let lastComma = str.lastIndexOf(',');
+        let lastDot = str.lastIndexOf('.');
         
-        if (commaCount > 0 && dotCount > 0) {
-            const lastComma = str.lastIndexOf(',');
-            const lastDot = str.lastIndexOf('.');
-            if (lastComma > lastDot) {
-                // Formato europeo: 1.234,56 -> quitar puntos y reemplazar coma por punto
+        if (lastComma > lastDot && lastComma !== -1) {
+            // Formato europeo: 1.234,56
+            let parts = str.split(',');
+            if (parts.length === 2 && parts[1].length <= 2) {
+                decimalSeparator = ',';
                 str = str.replace(/\./g, '').replace(',', '.');
-            } else if (lastDot > lastComma) {
-                // Formato americano: 1,234.56 -> quitar comas
+            } else {
+                // Comas como separadores de miles
                 str = str.replace(/,/g, '');
             }
-        } else if (commaCount > 0 && dotCount === 0) {
-            // Caso: "1,234" puede ser miles o decimal
-            const parts = str.split(',');
+        } else if (lastDot > lastComma && lastDot !== -1) {
+            // Formato americano: 1,234.56
+            let parts = str.split('.');
+            if (parts.length === 2 && parts[1].length <= 2) {
+                decimalSeparator = '.';
+                str = str.replace(/,/g, '');
+            } else {
+                // Puntos como separadores de miles (formato extraño)
+                str = str.replace(/\./g, '');
+            }
+        } else if (lastComma !== -1 && lastDot === -1) {
+            // Solo una coma: puede ser decimal (ej: 123,45) o miles (123,456)
+            let parts = str.split(',');
             if (parts.length === 2 && parts[1].length <= 2 && !isNaN(Number(parts[1]))) {
                 str = str.replace(',', '.');
             } else {
                 str = str.replace(/,/g, '');
             }
         }
-        // Si solo hay puntos, asumimos que es decimal estándar (ya está bien)
         
+        // Limpiar cualquier punto que haya quedado como separador de miles (ej: "1.234")
+        if ((str.match(/\./g) || []).length > 1) {
+            str = str.replace(/\./g, '');
+        }
+        
+        // Conversión final
         const num = Number(str);
         return isNaN(num) ? 0 : num;
     }
@@ -228,19 +252,14 @@
         }
 
         let maxDate = null;
+        // Usaremos un Set para evitar duplicados por (idVendedor, idCliente, documento, total, fecha)
+        const ventasSet = new Set();
         
         // Procesar ventas (el núcleo de las sumas)
         for (const row of data.ventasRaw) {
             if (!row[cols.ventas.idVendedor] || !row[cols.ventas.idCliente]) continue;
 
             let total = parseNumber(row[cols.ventas.total]);
-            // Si el parseo dio 0 pero el valor original no era vacío ni cero textual, intentar recuperar manual
-            if (total === 0 && row[cols.ventas.total] && String(row[cols.ventas.total]).trim() !== '0') {
-                // Último recurso: eliminar todo excepto dígitos, punto y menos
-                let rawStr = String(row[cols.ventas.total]).replace(/[^0-9.,-]/g, '');
-                let tentative = parseFloat(rawStr.replace(/,/g, ''));
-                if (!isNaN(tentative)) total = tentative;
-            }
             
             // Aplicar reglas contables según TIPO DE VENTA
             if (cols.ventas.tipo) {
@@ -274,6 +293,11 @@
                 idCliente = docToId.get(documento); 
             }
 
+            // Crear clave única para evitar duplicados (previene errores por filas repetidas en CSV)
+            const uniqueKey = `${idVendedor}|${idCliente}|${documento}|${total}|${fechaRaw}`;
+            if (ventasSet.has(uniqueKey)) continue;
+            ventasSet.add(uniqueKey);
+
             const ventaNorm = { idVendedor, idCliente, total, fechaObj, razon };
 
             if (idVendedor) { 
@@ -298,7 +322,8 @@
             if (titleElem) titleElem.textContent = `Última venta: ${formatted}`;
         }
 
-        // Procesar productos (sin cambios mayores, solo filtro de fecha)
+        // Procesar productos (sin cambios mayores, solo filtro de fecha y evitar duplicados)
+        const productosSet = new Set();
         for (const row of data.productosRaw) {
             if (!row[cols.productos.idVendedor] || !row[cols.productos.idCliente]) continue;
 
@@ -321,6 +346,10 @@
             if (!idCliente && documento && docToId.has(documento)) { 
                 idCliente = docToId.get(documento); 
             }
+
+            const prodKey = `${idVendedor}|${idCliente}|${documento}|${producto}|${unid}|${caja}|${fechaRawProd}`;
+            if (productosSet.has(prodKey)) continue;
+            productosSet.add(prodKey);
 
             const prodNorm = { producto, unid, caja, fechaObj };
 
