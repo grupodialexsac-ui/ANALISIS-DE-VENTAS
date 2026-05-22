@@ -186,11 +186,6 @@
             // REGLAS CONTABLES FINALES
             if (cols.ventas.tipo) {
                 const tipoVenta = normalizeText(row[cols.ventas.tipo]);
-                
-                // Excluir documentos no válidos como cotizaciones, pedidos o guías
-                if (tipoVenta.includes('PROFORMA') || tipoVenta.includes('COTIZA') || tipoVenta.includes('PEDIDO') || tipoVenta.includes('GUIA')) {
-                    continue; 
-                }
 
                 // Restar Notas de Crédito, Anulaciones y Devoluciones, pero evitar que "Nota de Venta" se reste
                 if ((tipoVenta.includes('NC') || tipoVenta.includes('CREDITO') || tipoVenta.includes('ANULAD') || tipoVenta.includes('DEVOL')) && !tipoVenta.includes('NOTA DE VENTA')) {
