@@ -33,8 +33,14 @@
             str = '-' + str.slice(1, -1).trim();
         }
         
-        // Eliminamos explícitamente el símbolo S/ (incluso si está pegado) y el símbolo $
-        str = str.replace(/S\//gi, '').replace(/\$/g, '').trim();
+        // Eliminamos S/ y S/. explícitamente
+        str = str.replace(/S\/\.?/gi, '').replace(/\$/g, '').trim();
+        
+        // Limpiamos guiones tipográficos raros y espacios vacíos después del menos
+        str = str.replace(/[−–—]/g, '-').replace(/-\s+/g, '-');
+        
+        // Si por error de limpieza quedó un punto antes del signo negativo (ej: .-412.00)
+        str = str.replace(/^\.-/, '-');
 
         // REGLA DE ORO DE SHEETS: Si todavía quedan letras, Sheets lo considera texto y suma 0.
         if (/[a-zA-Z]/.test(str)) {
