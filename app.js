@@ -16,7 +16,7 @@
         clientesRaw: []
     };
 
-    // Variables de Filtro de Fecha Global (basado en mes)
+    // Variables de Filtro de Fecha Global
     let globalStartDate = null;
     let globalEndDate = null;
 
@@ -90,46 +90,6 @@
         return { string: `${day}/${month}`, sortValue: fecha.getTime(), fullDate: fecha };
     }
 
-    // Convierte un string "YYYY-MM" a fechas de inicio y fin del mes
-    function getMonthRange(monthYear) {
-        if (!monthYear) return { start: null, end: null };
-        const [year, month] = monthYear.split('-').map(Number);
-        const start = new Date(year, month - 1, 1);
-        const end = new Date(year, month, 0); // último día del mes
-        end.setHours(23, 59, 59, 999);
-        return { start, end };
-    }
-
-    // Inicializa el selector de mes con el mes actual y aplica filtro
-    function initMonthFilter() {
-        const inputMes = document.getElementById('filtroMes');
-        if (!inputMes) return;
-        const hoy = new Date();
-        const year = hoy.getFullYear();
-        const month = String(hoy.getMonth() + 1).padStart(2, '0');
-        const mesActual = `${year}-${month}`;
-        inputMes.value = mesActual;
-        // Aplicar el filtro automáticamente al cargar
-        aplicarFiltroMes(mesActual);
-    }
-
-    function aplicarFiltroMes(monthYear) {
-        const { start, end } = getMonthRange(monthYear);
-        globalStartDate = start;
-        globalEndDate = end;
-        normalizeAllData();
-        
-        // Recargar vista actual
-        const activeModuloLi = document.querySelector('#listaModulos li.active');
-        window.cambiarModulo(currentModule, activeModuloLi);
-        
-        // Si estamos en búsqueda y hay un cliente seleccionado, refrescar su ficha
-        const currentIdCliente = document.getElementById('detalleDocCliente').dataset.id;
-        if (currentModule === 'busqueda' && currentIdCliente) {
-            mostrarDetalleCliente(currentIdCliente);
-        }
-    }
-
     async function loadCSV(url, retries = 2) {
         for (let i = 0; i <= retries; i++) {
             try {
@@ -194,7 +154,7 @@
                 producto: findColumn(data.productosRaw[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']),
                 unid: findColumn(data.productosRaw[0], ['CANTIDAD UNID', 'UNID']),
                 caja: findColumn(data.productosRaw[0], ['CANTIDAD CAJA', 'CAJA']),
-                fecha: findColumn(data.productosRaw[0], ['FECHA DE VENTA', 'FECHA', 'FECHA_EMISION', 'FECHA EMISION'])
+                fecha: findColumn(data.productosRaw[0], ['FECHA DE VENTA', 'FECHA', 'FECHA_EMISION', 'FECHA EMISION']) // Nuevo para mapear
             };
         }
         if (data.clientesRaw.length) {
@@ -209,7 +169,7 @@
         }
     }
 
-    // Normalización con Filtros Aplicados (fechas por mes)
+    // Normalización con Filtros Aplicados
     function normalizeAllData() {
         vendedoresMap.clear();
         clientesMap.clear();
@@ -251,17 +211,18 @@
             if (cli.documento) docToId.set(normalizeText(cli.documento), id);
         }
 
-        // 3. Ventas con Filtro de Fechas (globalStartDate/globalEndDate)
+        // 3. Ventas con Filtro de Fechas
         let maxDate = null;
         for (const row of data.ventasRaw) {
             const fechaRaw = row[cols.ventas.fecha];
             const fechaObj = parseDateStrict(fechaRaw);
 
-            // APLICAR FILTRO GLOBAL (mes)
+            // APLICAR FILTRO GLOBAL
             if (globalStartDate || globalEndDate) {
-                if (!fechaObj) continue;
-                if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
-                if (globalEndDate && fechaObj.fullDate > globalEndDate) continue;
+                if (fechaObj) {
+                    if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
+                    if (globalEndDate && fechaObj.fullDate > globalEndDate) continue;
+                }
             }
 
             const idVendedor = normalizeText(row[cols.ventas.idVendedor]);
@@ -306,9 +267,10 @@
 
             // APLICAR FILTRO GLOBAL
             if (globalStartDate || globalEndDate) {
-                if (!fechaObj) continue;
-                if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
-                if (globalEndDate && fechaObj.fullDate > globalEndDate) continue;
+                if (fechaObj) {
+                    if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
+                    if (globalEndDate && fechaObj.fullDate > globalEndDate) continue;
+                }
             }
 
             const idVendedor = normalizeText(row[cols.productos.idVendedor]);
@@ -335,22 +297,24 @@
         }
     }
 
-    // Activa el filtro por mes al pulsar el botón del sidebar
+    // Activa el filtrado general al pulsar el botón del sidebar
     window.aplicarFiltroFecha = function() {
-        const mesValue = document.getElementById('filtroMes').value;
-        if (mesValue) {
-            aplicarFiltroMes(mesValue);
-        } else {
-            // Si no hay mes seleccionado, limpiamos filtros
-            globalStartDate = null;
-            globalEndDate = null;
-            normalizeAllData();
-            const activeModuloLi = document.querySelector('#listaModulos li.active');
-            window.cambiarModulo(currentModule, activeModuloLi);
-            const currentIdCliente = document.getElementById('detalleDocCliente').dataset.id;
-            if (currentModule === 'busqueda' && currentIdCliente) {
-                mostrarDetalleCliente(currentIdCliente);
-            }
+        const startVal = document.getElementById('filtroFechaInicio').value;
+        const endVal = document.getElementById('filtroFechaFin').value;
+        
+        globalStartDate = startVal ? new Date(`${startVal}T00:00:00`) : null;
+        globalEndDate = endVal ? new Date(`${endVal}T23:59:59`) : null;
+        
+        normalizeAllData();
+        
+        // Recargar vista actual
+        const activeModuloLi = document.querySelector('#listaModulos li.active');
+        window.cambiarModulo(currentModule, activeModuloLi);
+        
+        // Si estamos en búsqueda y hay un cliente seleccionado, refrescar su ficha
+        const currentIdCliente = document.getElementById('detalleDocCliente').dataset.id;
+        if (currentModule === 'busqueda' && currentIdCliente) {
+            mostrarDetalleCliente(currentIdCliente);
         }
     };
 
@@ -633,127 +597,6 @@
         renderMap('ContenedorMapaSituacion', activeClientIds);
     }
 
-    // --- Exportar tabla ABC a PDF (versión mejorada y estable) ---
-    window.exportarTablaABC = async function() {
-        const tablaOriginal = document.querySelector('#tablaABC');
-        if (!tablaOriginal) {
-            alert('No se encontró la tabla para exportar.');
-            return;
-        }
-
-        // Verificar que las librerías existen
-        if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
-            alert('Las librerías para generar PDF no se cargaron correctamente. Recarga la página.');
-            return;
-        }
-
-        // Mostrar indicador de carga (opcional)
-        const btn = document.querySelector('.btn-export-pdf');
-        const textoOriginal = btn.innerHTML;
-        btn.innerHTML = '⏳ Generando PDF...';
-        btn.disabled = true;
-
-        try {
-            // Clonar profundamente la tabla y su contenedor con estilos calculados
-            const cloneTabla = tablaOriginal.cloneNode(true);
-            // Eliminar eventos y estilos interactivos que puedan interferir
-            const filas = cloneTabla.querySelectorAll('tbody tr');
-            filas.forEach(fila => {
-                fila.removeAttribute('onclick');
-                fila.style.cursor = 'default';
-            });
-            
-            // Crear un contenedor temporal con dimensiones fijas de escritorio
-            const container = document.createElement('div');
-            container.style.position = 'fixed';
-            container.style.left = '-10000px';
-            container.style.top = '0';
-            container.style.width = '1200px'; // ancho estándar PC
-            container.style.backgroundColor = 'white';
-            container.style.padding = '20px';
-            container.style.fontFamily = "'Segoe UI', Arial, sans-serif";
-            container.style.zIndex = '-1';
-            
-            // Añadir título
-            const titulo = document.createElement('h2');
-            titulo.textContent = 'Segmentación ABC Dinámica de Clientes (Pareto 80/20)';
-            titulo.style.color = '#1a73e8';
-            titulo.style.marginBottom = '20px';
-            titulo.style.fontSize = '18px';
-            container.appendChild(titulo);
-            
-            // Aplicar estilos inline a la tabla clonada para asegurar consistencia
-            cloneTabla.style.width = '100%';
-            cloneTabla.style.borderCollapse = 'collapse';
-            cloneTabla.style.fontSize = '12px';
-            const celdasEncabezado = cloneTabla.querySelectorAll('th');
-            celdasEncabezado.forEach(th => {
-                th.style.backgroundColor = '#f8f9fa';
-                th.style.padding = '10px';
-                th.style.borderBottom = '2px solid #dadce0';
-                th.style.textAlign = 'left';
-                th.style.fontWeight = 'bold';
-            });
-            const celdasCuerpo = cloneTabla.querySelectorAll('td');
-            celdasCuerpo.forEach(td => {
-                td.style.padding = '8px 10px';
-                td.style.borderBottom = '1px solid #eee';
-            });
-            // Mantener badges
-            const badges = cloneTabla.querySelectorAll('.badge');
-            badges.forEach(b => {
-                if (b.classList.contains('badge-a')) b.style.backgroundColor = '#e6f4ea';
-                if (b.classList.contains('badge-b')) b.style.backgroundColor = '#fef7e0';
-                if (b.classList.contains('badge-c')) b.style.backgroundColor = '#fce8e6';
-                b.style.padding = '4px 10px';
-                b.style.borderRadius = '12px';
-                b.style.fontSize = '0.7rem';
-                b.style.fontWeight = 'bold';
-                b.style.display = 'inline-block';
-            });
-            
-            container.appendChild(cloneTabla);
-            document.body.appendChild(container);
-            
-            // Esperar un frame para que el navegador renderice
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // Capturar con html2canvas
-            const canvas = await html2canvas(container, {
-                scale: 2,
-                backgroundColor: '#ffffff',
-                logging: false,
-                useCORS: false,
-                windowWidth: container.scrollWidth,
-                windowHeight: container.scrollHeight
-            });
-            
-            const imgData = canvas.toDataURL('image/png');
-            const { jsPDF } = window.jspdf;
-            // PDF en orientación horizontal (landscape)
-            const pdf = new jsPDF({
-                orientation: 'landscape',
-                unit: 'mm',
-                format: 'a4'
-            });
-            const imgWidth = 280; // mm (A4 landscape = 297mm, dejamos márgenes)
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-            pdf.addImage(imgData, 'PNG', 8, 8, imgWidth, imgHeight);
-            pdf.save('segmentacion_abc_clientes.pdf');
-            
-        } catch (error) {
-            console.error('Error detallado al generar PDF:', error);
-            alert('Ocurrió un error al generar el PDF. Detalle: ' + error.message);
-        } finally {
-            // Limpiar el contenedor temporal
-            const tempContainer = document.body.querySelector('div[style*="left: -10000px"]');
-            if (tempContainer) tempContainer.remove();
-            // Restaurar botón
-            btn.innerHTML = textoOriginal;
-            btn.disabled = false;
-        }
-    };
-
     // --- Fuse.js instance ---
     let fuseInstance = null;
     let allSearchResults = [];
@@ -907,6 +750,7 @@
         for (const p of productos) {
             if (!p.producto) continue;
             
+            // Si hay filtro activo de fecha de gráfico, omitimos si no coincide
             if (dateStringFilter) {
                 if (!p.fechaObj || p.fechaObj.string !== dateStringFilter) continue;
             }
@@ -956,7 +800,7 @@
         
         const docElem = document.getElementById('detalleDocCliente');
         docElem.textContent = cliente.documento || idC;
-        docElem.dataset.id = idC;
+        docElem.dataset.id = idC; // Guarda el ID para referenciarlo en el filtro
 
         const ventas = ventasPorCliente.get(idC) || [];
         const totalFact = ventas.reduce((s, v) => s + v.total, 0);
@@ -986,13 +830,14 @@
                 onClick: (event, activeElements) => {
                     if (activeElements.length > 0) {
                         const index = activeElements[0].index;
-                        const clickedDateString = sortedHist[index][0];
+                        const clickedDateString = sortedHist[index][0]; // Toma la fecha "DD/MM"
                         window.filtrarProductosPorFecha(idC, clickedDateString);
                     }
                 }
             }
         });
 
+        // Renderiza tabla general inicialmente
         window.filtrarProductosPorFecha(idC, null);
     }
 
@@ -1147,8 +992,7 @@
             data.vendedoresRaw = vendedores; data.ventasRaw = ventas; data.productosRaw = productos; data.clientesRaw = clientes;
 
             initColumns();
-            // Inicializar filtro por mes actual ANTES de normalizar
-            initMonthFilter(); // esto setea globalStartDate/EndDate y llama normalizeAllData()
+            normalizeAllData();
             buildFuseIndex();
             generateVendedoresMenu();
 
