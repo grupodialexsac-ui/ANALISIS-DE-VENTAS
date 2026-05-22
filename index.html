@@ -9,6 +9,9 @@
     <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Librerías para exportar a PDF (orden correcto) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -33,6 +36,13 @@
                 <p>BI & Logística</p>
                 <p id="fechaUltimaVentaSidebar">Última venta: --</p>
             </div>
+            
+            <div class="sidebar-filters">
+                <label>Filtro por Mes:</label>
+                <input type="month" id="filtroMes" class="date-input" title="Seleccionar Mes">
+                <button class="btn-sidebar-action" onclick="window.aplicarFiltroFecha()" style="text-align:center; font-weight:bold;">Aplicar Filtro</button>
+            </div>
+
             <ul class="modulos-list" id="listaModulos">
                 <li class="active" onclick="cambiarModulo('general', this)">GENERAL</li>
                 <li onclick="cambiarModulo('productividad', this)">PRODUCTIVIDAD</li>
@@ -161,7 +171,10 @@
                 </div>
                 <div class="dashboard-grid">
                     <div class="card full-width">
-                        <h3>Segmentación ABC Dinámica de Clientes (Pareto 80/20)</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="margin: 0;">Segmentación ABC Dinámica de Clientes (Pareto 80/20)</h3>
+                            <button class="btn-export-pdf" onclick="window.exportarTablaABC()">📄 Exportar tabla a PDF</button>
+                        </div>
                         <div class="table-wrapper">
                             <table id="tablaABC">
                                 <thead><tr><th>Cliente (Razón Comercial)</th><th>Segmento</th><th class="num-col">Total Facturado</th></tr></thead>
@@ -187,17 +200,23 @@
                 
                 <div class="card" id="panelDetalleCliente" style="display:none; width:100%;">
                     <h3 id="detalleNombreCliente">Seleccione un Cliente</h3>
-                    <p style="margin:0 0 15px 0; font-size:0.9rem; color:#666;">Documento: <strong id="detalleDocCliente">---</strong></p>
+                    <p style="margin:0 0 15px 0; font-size:0.9rem; color:#666;">Documento: <strong id="detalleDocCliente" data-id="">---</strong></p>
                     
                     <div class="kpi-resumen">
                         <div class="kpi-box"><h4>Total Comprado</h4><span id="detalleTotalVenta" style="font-size:1.1rem;">S/ 0.00</span></div>
                         <div class="kpi-box"><h4>Estado Comercial</h4><div id="detalleEstadoCli" style="margin-top:5px;"></div></div>
                     </div>
 
-                    <h4 style="color:#5f6368; font-size:0.8rem; text-transform:uppercase; margin-top:10px;">Historial Dinámico de Compras</h4>
+                    <h4 style="color:#5f6368; font-size:0.8rem; text-transform:uppercase; margin-top:10px;">Historial Dinámico de Compras (Clic para ver productos del día)</h4>
                     <div class="chart-container" style="height:180px; margin-bottom:20px;"><canvas id="chartClienteHistorial"></canvas></div>
 
-                    <h4 style="color:#5f6368; font-size:0.8rem; text-transform:uppercase;">Mix de Productos Comprados</h4>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:10px;">
+                        <h4 style="color:#5f6368; font-size:0.8rem; text-transform:uppercase; margin:0;">
+                            Mix de Productos Comprados <span id="lblFiltroProdFecha" style="color:#1a73e8;text-transform:none;font-weight:bold;"></span>
+                        </h4>
+                        <button id="btnLimpiarFiltroProd" onclick="window.limpiarFiltroProductos()" style="display:none; background:rgba(217,48,37,0.1); border:1px solid rgba(217,48,37,0.3); color:#d93025; cursor:pointer; font-size:0.75rem; font-weight:bold; padding:6px 12px; border-radius:15px; transition:all 0.2s;">✕ Limpiar fecha</button>
+                    </div>
+
                     <div class="table-wrapper">
                         <table id="tablaClienteProductos">
                             <thead><tr><th>Producto</th><th class="num-col">Volumen Total</th></tr></thead>
@@ -209,7 +228,8 @@
         </main>
     </div>
 
-    <div class="modal-overlay" id="modalInactivos" onclick="if(event.target==this) cerrarModalInactivos()">        <div class="modal-content">
+    <div class="modal-overlay" id="modalInactivos" onclick="if(event.target==this) cerrarModalInactivos()">        
+        <div class="modal-content">
             <span class="modal-close" onclick="cerrarModalInactivos()">&times;</span>
             <h2 style="margin-top:0; color:#1a73e8; font-size:1.3rem;" id="tituloModalInactivos">Clientes sin Ventas Asociadas</h2>
             <p style="font-size:0.85rem; color:#666; margin-bottom:15px;">Lista de clientes del portafolio que registran cero transacciones según los filtros aplicados.</p>
