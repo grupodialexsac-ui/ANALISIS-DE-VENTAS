@@ -2,10 +2,10 @@
 (function() {
     // --- URLs de datos ---
     const urls = {
-        vendedores: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ70FuTF7cerHOQSNXrIcLFDFRprfHAV728CeKLsmNZdlxq3rA_SunZ6ILxYFtZVHVfQdphUycfNbUC/pub?gid=0&single=true&output=csv',
-        ventas: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ70FuTF7cerHOQSNXrIcLFDFRprfHAV728CeKLsmNZdlxq3rA_SunZ6ILxYFtZVHVfQdphUycfNbUC/pub?gid=588620531&single=true&output=csv',
-        productos: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ70FuTF7cerHOQSNXrIcLFDFRprfHAV728CeKLsmNZdlxq3rA_SunZ6ILxYFtZVHVfQdphUycfNbUC/pub?gid=1241891503&single=true&output=csv',
-        clientes: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ70FuTF7cerHOQSNXrIcLFDFRprfHAV728CeKLsmNZdlxq3rA_SunZ6ILxYFtZVHVfQdphUycfNbUC/pub?gid=1344644608&single=true&output=csv'
+        vendedores:'aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlE3MEZ1VEY3Y2VySE9RU05YckljTEZERlJwcmZIQVY3MjhDZUtMc21OWmRseHEzckFfU3VuWjZJTHhZRnRaVkhWZlFkcGhVeWNmTmJVQy9wdWI/Z2lkPTAmc2luZ2xlPXRydWUmb3V0cHV0PWNzdg==',
+        ventas: 'aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlE3MEZ1VEY3Y2VySE9RU05YckljTEZERlJwcmZIQVY3MjhDZUtMc21OWmRseHEzckFfU3VuWjZJTHhZRnRaVkhWZlFkcGhVeWNmTmJVQy9wdWI/Z2lkPTU4ODYyMDUzMSZzaW5nbGU9dHJ1ZSZvdXRwdXQ9Y3N2',
+        productos: 'aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlE3MEZ1VEY3Y2VySE9RU05YckljTEZERlJwcmZIQVY3MjhDZUtMc21OWmRseHEzckFfU3VuWjZJTHhZRnRaVkhWZlFkcGhVeWNmTmJVQy9wdWI/Z2lkPTEyNDE4OTE1MDMmc2luZ2xlPXRydWUmb3V0cHV0PWNzdg==',
+        clientes: 'aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlE3MEZ1VEY3Y2VySE9RU05YckljTEZERlJwcmZIQVY3MjhDZUtMc21OWmRseHEzckFfU3VuWjZJTHhZRnRaVkhWZlFkcGhVeWNmTmJVQy9wdWI/Z2lkPTEzNDQ2NDQ2MDgmc2luZ2xlPXRydWUmb3V0cHV0PWNzdg=='
     };
 
     // --- Estado global interno ---
