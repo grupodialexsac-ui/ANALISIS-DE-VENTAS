@@ -1234,7 +1234,7 @@ window.verificarPassword = async function() {
 
     const inputPass = document.getElementById('passInput').value;
 
-    // HASH de Dialex123
+    // 
     const passwordHash =
         '841366dd134c264fe37e1cf5d237ab533bb24e0dfd7fcf1723ecfdad135f416b';
 
