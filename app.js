@@ -14,7 +14,65 @@
         productos: atob(urlsEncoded.productos),
         clientes: atob(urlsEncoded.clientes)
     };
+if (
+        location.hostname !== 'grupodialexsac-ui.github.io'
+    ) {
 
+        document.body.innerHTML = '';
+
+        return;
+    }
+
+    // Fecha de expiración
+    const fechaLimite = new Date('2026-12-31');
+
+    if (new Date() > fechaLimite) {
+
+        document.body.innerHTML = `
+            <div style="
+                display:flex;
+                justify-content:center;
+                align-items:center;
+                height:100vh;
+                font-size:24px;
+                font-family:sans-serif;
+            ">
+                Acceso expirado
+            </div>
+        `;
+
+        return;
+    }
+
+    // Bloquear clic derecho
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Bloquear teclas comunes de inspección
+    document.onkeydown = function(e) {
+
+        if (
+            e.key === 'F12' ||
+            (e.ctrlKey && e.shiftKey && e.key === 'I') ||
+            (e.ctrlKey && e.shiftKey && e.key === 'J') ||
+            (e.ctrlKey && e.key === 'u')
+        ) {
+            return false;
+        }
+    };
+
+    // Detectar DevTools
+    setInterval(() => {
+
+        if (
+            window.outerWidth - window.innerWidth > 160 ||
+            window.outerHeight - window.innerHeight > 160
+        ) {
+
+            document.body.innerHTML = '';
+
+        }
+
+    }, 1000);
     // --- Estado global interno ---
     let data = {
         vendedoresRaw: [],
