@@ -1,19 +1,24 @@
 // Módulo principal con encapsulación y mejoras de rendimiento
 (function() {
-    // --- URLs de datos ---
-    const urls = {
-        vendedores:'aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlE3MEZ1VEY3Y2VySE9RU05YckljTEZERlJwcmZIQVY3MjhDZUtMc21OWmRseHEzckFfU3VuWjZJTHhZRnRaVkhWZlFkcGhVeWNmTmJVQy9wdWI/Z2lkPTAmc2luZ2xlPXRydWUmb3V0cHV0PWNzdg==',
+
+    // --- URLs codificadas ---
+    const urlsEncoded = {
+        vendedores: 'aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlE3MEZ1VEY3Y2VySE9RU05YckljTEZERlJwcmZIQVY3MjhDZUtMc21OWmRseHEzckFfU3VuWjZJTHhZRnRaVkhWZlFkcGhVeWNmTmJVQy9wdWI/Z2lkPTAmc2luZ2xlPXRydWUmb3V0cHV0PWNzdg==',
+
         ventas: 'aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlE3MEZ1VEY3Y2VySE9RU05YckljTEZERlJwcmZIQVY3MjhDZUtMc21OWmRseHEzckFfU3VuWjZJTHhZRnRaVkhWZlFkcGhVeWNmTmJVQy9wdWI/Z2lkPTU4ODYyMDUzMSZzaW5nbGU9dHJ1ZSZvdXRwdXQ9Y3N2',
+
         productos: 'aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlE3MEZ1VEY3Y2VySE9RU05YckljTEZERlJwcmZIQVY3MjhDZUtMc21OWmRseHEzckFfU3VuWjZJTHhZRnRaVkhWZlFkcGhVeWNmTmJVQy9wdWI/Z2lkPTEyNDE4OTE1MDMmc2luZ2xlPXRydWUmb3V0cHV0PWNzdg==',
+
         clientes: 'aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlE3MEZ1VEY3Y2VySE9RU05YckljTEZERlJwcmZIQVY3MjhDZUtMc21OWmRseHEzckFfU3VuWjZJTHhZRnRaVkhWZlFkcGhVeWNmTmJVQy9wdWI/Z2lkPTEzNDQ2NDQ2MDgmc2luZ2xlPXRydWUmb3V0cHV0PWNzdg=='
     };
 
-const urls = {
-    vendedores: atob(urlsEncoded.vendedores),
-    ventas: atob(urlsEncoded.ventas),
-    productos: atob(urlsEncoded.productos),
-    clientes: atob(urlsEncoded.clientes)
-};
+    // --- URLs reales decodificadas ---
+    const urls = {
+        vendedores: atob(urlsEncoded.vendedores),
+        ventas: atob(urlsEncoded.ventas),
+        productos: atob(urlsEncoded.productos),
+        clientes: atob(urlsEncoded.clientes)
+    };
 
     // --- Estado global interno ---
     let data = {
@@ -22,7 +27,6 @@ const urls = {
         productosRaw: [],
         clientesRaw: []
     };
-
     // Variables de Filtro de Fecha Global (basado en mes)
     let globalStartDate = null;
     let globalEndDate = null;
