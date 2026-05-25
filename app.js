@@ -8,7 +8,6 @@
         clientes: 'aHR0cHM6Ly9kb2NzLmdvb2dsZS5jb20vc3ByZWFkc2hlZXRzL2QvZS8yUEFDWC0xdlE3MEZ1VEY3Y2VySE9RU05YckljTEZERlJwcmZIQVY3MjhDZUtMc21OWmRseHEzckFfU3VuWjZJTHhZRnRaVkhWZlFkcGhVeWNmTmJVQy9wdWI/Z2lkPTEzNDQ2NDQ2MDgmc2luZ2xlPXRydWUmb3V0cHV0PWNzdg=='
     };
 
-    // --- URLs reales decodificadas ---
     const urls = {
         vendedores: atob(urlsEncoded.vendedores),
         ventas: atob(urlsEncoded.ventas),
@@ -16,10 +15,8 @@
         clientes: atob(urlsEncoded.clientes)
     };
 
-    // BLOQUEAR CLIC DERECHO
     document.addEventListener('contextmenu', e => e.preventDefault());
 
-    // BLOQUEAR TECLAS DE INSPECCIÓN
     document.addEventListener('keydown', function(e) {
 
         if (
