@@ -1120,75 +1120,172 @@
         }, 100);
     };
 
-    function generateVendedoresMenu() {
-        const lista = document.getElementById('listaVendedoresHorizontal');
-        lista.innerHTML = '';
-        const vendedoresOrdenados = Array.from(vendedoresMap.values()).filter(v => v.meta > 0 && !v.nombreCompleto.includes('RETIRADO'));
-        for (const v of vendedoresOrdenados) {
-            const li = document.createElement('li');
-            li.textContent = v.nombreCompleto;
-            li.onclick = () => {
-                document.querySelectorAll('#listaVendedoresHorizontal li').forEach(el => el.classList.remove('active'));
-                li.classList.add('active');
-                currentVendedor = v;
-                document.getElementById('estadoVendedorSeleccion').style.display = 'none';
-                document.getElementById('contenidoProductividad').style.display = 'block';
-                loadProductividadModule(v);
-            };
-            lista.appendChild(li);
-        }
+function generateVendedoresMenu() {
+    const lista = document.getElementById('listaVendedoresHorizontal');
+    lista.innerHTML = '';
+
+    const vendedoresOrdenados = Array.from(vendedoresMap.values())
+        .filter(v => v.meta > 0 && !v.nombreCompleto.includes('RETIRADO'));
+
+    for (const v of vendedoresOrdenados) {
+        const li = document.createElement('li');
+
+        li.textContent = v.nombreCompleto;
+
+        li.onclick = () => {
+            document.querySelectorAll('#listaVendedoresHorizontal li')
+                .forEach(el => el.classList.remove('active'));
+
+            li.classList.add('active');
+
+            currentVendedor = v;
+
+            document.getElementById('estadoVendedorSeleccion').style.display = 'none';
+            document.getElementById('contenidoProductividad').style.display = 'block';
+
+            loadProductividadModule(v);
+        };
+
+        lista.appendChild(li);
     }
+}
 
-    async function inicializarApp() {
-        try {
-            const [vendedores, ventas, productos, clientes] = await Promise.all([
-                loadCSV(urls.vendedores), loadCSV(urls.ventas), loadCSV(urls.productos), loadCSV(urls.clientes)
-            ]);
-            data.vendedoresRaw = vendedores; data.ventasRaw = ventas; data.productosRaw = productos; data.clientesRaw = clientes;
+async function inicializarApp() {
+    try {
 
-            initColumns();
-            // Inicializar filtro por mes actual ANTES de normalizar
-            initMonthFilter(); // esto setea globalStartDate/EndDate y llama normalizeAllData()
-            buildFuseIndex();
-            generateVendedoresMenu();
+        const [vendedores, ventas, productos, clientes] = await Promise.all([
+            loadCSV(urls.vendedores),
+            loadCSV(urls.ventas),
+            loadCSV(urls.productos),
+            loadCSV(urls.clientes)
+        ]);
 
-            const activeModuloLi = document.querySelector('#listaModulos li.active');
-            window.cambiarModulo('general', activeModuloLi);
+        data.vendedoresRaw = vendedores;
+        data.ventasRaw = ventas;
+        data.productosRaw = productos;
+        data.clientesRaw = clientes;
 
-            setTimeout(() => {
-                document.getElementById('loadingScreen').style.display = 'none';
-                document.getElementById('appContainer').style.visibility = 'visible';
-                for (const id in charts) { if (charts[id] && charts[id].resize) charts[id].resize(); }
-            }, 600);
-        } catch (err) {
-            console.error(err);
-            document.getElementById('loadingSpinner').style.display = 'none';
-            document.getElementById('loadingTitle').textContent = 'Error de conexión. Verifique los enlaces de los CSV.';
-            document.getElementById('loadingTitle').style.color = '#d93025';
-        }
+        initColumns();
+
+        // Inicializar filtro por mes actual
+        initMonthFilter();
+
+        buildFuseIndex();
+
+        generateVendedoresMenu();
+
+        const activeModuloLi = document.querySelector('#listaModulos li.active');
+
+        window.cambiarModulo('general', activeModuloLi);
+
+        setTimeout(() => {
+
+            document.getElementById('loadingScreen').style.display = 'none';
+
+            document.getElementById('appContainer').style.visibility = 'visible';
+
+            for (const id in charts) {
+                if (charts[id] && charts[id].resize) {
+                    charts[id].resize();
+                }
+            }
+
+        }, 600);
+
+    } catch (err) {
+
+        console.error(err);
+
+        document.getElementById('loadingSpinner').style.display = 'none';
+
+        document.getElementById('loadingTitle').textContent =
+            'Error de conexión. Verifique los enlaces de los CSV.';
+
+        document.getElementById('loadingTitle').style.color = '#d93025';
     }
+}
 
-    window.verificarPassword = async function() {
-        const inputPass = document.getElementById('passInput').value;
-        if (inputPass === 'Dialex123') {
-            document.getElementById('loginScreen').style.opacity = '0';
-            setTimeout(() => {
-                document.getElementById('loginScreen').style.display = 'none';
-                document.getElementById('loadingScreen').style.display = 'flex';
-                inicializarApp();
-            }, 300);
-        } else {
-            document.getElementById('loginError').style.display = 'block';
-        }
-    };
 
-    window.evaluarTeclado = function(e) { if (e.key === 'Enter') window.verificarPassword(); };
+// ===========================
+// HASH PASSWORD
+// ===========================
 
-    document.addEventListener('click', function(e) {
-        const list = document.getElementById('listaSugerenciasClientes');
-        const input = document.getElementById('inputBusquedaCliente');
-        if (list && input && e.target !== input && e.target !== list && !list.contains(e.target)) {
-            list.style.display = 'none';
-        }
-    });
+async function hashPassword(text) {
+
+    const encoder = new TextEncoder();
+
+    const data = encoder.encode(text);
+
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+
+    return hashArray
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+
+// ===========================
+// LOGIN
+// ===========================
+
+window.verificarPassword = async function() {
+
+    const inputPass = document.getElementById('passInput').value;
+
+    // HASH de Dialex123
+    const passwordHash =
+        '841366dd134c264fe37e1cf5d237ab533bb24e0dfd7fcf1723ecfdad135f416b';
+
+    const inputHash = await hashPassword(inputPass);
+
+    if (inputHash === passwordHash) {
+
+        document.getElementById('loginError').style.display = 'none';
+
+        document.getElementById('loginScreen').style.opacity = '0';
+
+        setTimeout(() => {
+
+            document.getElementById('loginScreen').style.display = 'none';
+
+            document.getElementById('loadingScreen').style.display = 'flex';
+
+            inicializarApp();
+
+        }, 300);
+
+    } else {
+
+        document.getElementById('loginError').style.display = 'block';
+    }
+};
+
+
+window.evaluarTeclado = function(e) {
+
+    if (e.key === 'Enter') {
+        window.verificarPassword();
+    }
+};
+
+
+document.addEventListener('click', function(e) {
+
+    const list = document.getElementById('listaSugerenciasClientes');
+
+    const input = document.getElementById('inputBusquedaCliente');
+
+    if (
+        list &&
+        input &&
+        e.target !== input &&
+        e.target !== list &&
+        !list.contains(e.target)
+    ) {
+        list.style.display = 'none';
+    }
+});
+
 })();
