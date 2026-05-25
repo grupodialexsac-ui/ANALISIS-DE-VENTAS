@@ -216,7 +216,9 @@
                 producto: findColumn(data.productosRaw[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']),
                 unid: findColumn(data.productosRaw[0], ['CANTIDAD UNID', 'UNID']),
                 caja: findColumn(data.productosRaw[0], ['CANTIDAD CAJA', 'CAJA']),
-                fecha: findColumn(data.productosRaw[0], ['FECHA DE VENTA', 'FECHA', 'FECHA_EMISION', 'FECHA EMISION'])
+                fecha: findColumn(data.productosRaw[0], ['FECHA DE VENTA', 'FECHA', 'FECHA_EMISION', 'FECHA EMISION']),
+                lat: findColumn(data.clientesRaw[0], ['LATITUD', 'LAT', 'LATITUDE']),
+                lon: findColumn(data.clientesRaw[0], ['LONGITUD', 'LON', 'LONGITUDE', 'LNG'])
             };
         }
         if (data.clientesRaw.length) {
@@ -261,17 +263,27 @@
             const ubicacion = row[cols.clientes.ubicacion] || '';
             const idVendedor = normalizeText(row[cols.clientes.idVendedor]);
             const estado = normalizeText(row[cols.clientes.estado]);
-            clientesMap.set(id, { id, documento, razon, ubicacion, idVendedor, estado });
-            if (idVendedor) {
-                if (!clientesPorVendedor.has(idVendedor)) clientesPorVendedor.set(idVendedor, []);
-                clientesPorVendedor.get(idVendedor).push(id);
-            }
+            // 👇 Leer coordenadas (convertir a número, validar)
+    let lat = null, lon = null;
+    if (cols.clientes.lat && cols.clientes.lon) {
+        const rawLat = parseFloat(row[cols.clientes.lat]);
+        const rawLon = parseFloat(row[cols.clientes.lon]);
+        if (!isNaN(rawLat) && !isNaN(rawLon) && rawLat >= -90 && rawLat <= 90 && rawLon >= -180 && rawLon <= 180) {
+            lat = rawLat;
+            lon = rawLon;
         }
+    }
 
-        const docToId = new Map();
-        for (const [id, cli] of clientesMap.entries()) {
-            if (cli.documento) docToId.set(normalizeText(cli.documento), id);
-        }
+    clientesMap.set(id, { 
+        id, documento, razon, ubicacion, idVendedor, estado,
+        lat, lon   // ← agregado
+    });
+
+    if (idVendedor) {
+        if (!clientesPorVendedor.has(idVendedor)) clientesPorVendedor.set(idVendedor, []);
+        clientesPorVendedor.get(idVendedor).push(id);
+    }
+}
 
         // 3. Ventas con Filtro de Fechas (globalStartDate/globalEndDate)
         let maxDate = null;
@@ -406,49 +418,75 @@
     }
 
     function renderMap(containerId, clientIds) {
-        destroyMap(containerId);
-        const container = document.getElementById(containerId);
-        if (!container) return;
-        const map = L.map(containerId).setView([-9.1899, -75.0151], 5);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: 'Dialex System'
-        }).addTo(map);
-        mapInstances[containerId] = map;
+    destroyMap(containerId);
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const map = L.map(containerId).setView([-9.1899, -75.0151], 5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: 'Dialex System'
+    }).addTo(map);
+    mapInstances[containerId] = map;
 
-        const featureGroup = L.featureGroup().addTo(map);
-        const cityCoords = {
-            'AREQUIPA': [-16.3988, -71.5369], 'CUSCO': [-13.5319, -71.9675], 'TRUJILLO': [-8.1084, -79.0288],
-            'CHICLAYO': [-6.7714, -79.8409], 'PIURA': [-5.1945, -80.6328], 'IQUITOS': [-3.7491, -73.2538],
-            'HUANCAYO': [-12.0651, -75.2049], 'TACNA': [-18.0147, -70.2488], 'CAJAMARCA': [-7.1565, -78.5173],
-            'PUNO': [-15.8402, -70.0219], 'LIMA': [-12.0464, -77.0428]
-        };
+    const featureGroup = L.featureGroup().addTo(map);
+    
+    // Diccionario de respaldo por ciudad (sin offsets)
+    const cityCoords = {
+        'AREQUIPA': [-16.3988, -71.5369], 'CUSCO': [-13.5319, -71.9675],
+        'TRUJILLO': [-8.1084, -79.0288], 'CHICLAYO': [-6.7714, -79.8409],
+        'PIURA': [-5.1945, -80.6328], 'IQUITOS': [-3.7491, -73.2538],
+        'HUANCAYO': [-12.0651, -75.2049], 'TACNA': [-18.0147, -70.2488],
+        'CAJAMARCA': [-7.1565, -78.5173], 'PUNO': [-15.8402, -70.0219],
+        'LIMA': [-12.0464, -77.0428]
+    };
 
-        const ventasPorClienteMap = new Map();
-        for (const [cliId, ventas] of ventasPorCliente.entries()) {
-            const total = ventas.reduce((sum, v) => sum + v.total, 0);
-            if (total > 0) ventasPorClienteMap.set(cliId, total);
-        }
-
-        for (const cliId of clientIds) {
-            const cliente = clientesMap.get(cliId);
-            if (!cliente) continue;
-            const ubic = normalizeText(cliente.ubicacion);
-            let coords = cityCoords['LIMA'];
-            for (const [city, coord] of Object.entries(cityCoords)) {
-                if (ubic.includes(city)) { coords = coord; break; }
-            }
-            const totalVentas = ventasPorClienteMap.get(cliId) || 0;
-            const color = totalVentas > 0 ? '#34a853' : '#ea4335';
-            const marker = L.marker([coords[0] + (Math.sin(cliId.charCodeAt(0)) * 0.03), coords[1] + (Math.cos(cliId.charCodeAt(cliId.length-1)) * 0.03)], {
-                icon: L.divIcon({ html: `<div style="background:${color};width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.4);"></div>`, className: 'custom-pin' })
-            }).bindPopup(`<b>${cliente.razon || 'Cliente'}</b><br>Facturación: S/ ${totalVentas.toLocaleString()}<br><small>${cliente.ubicacion}</small>`);
-            marker.addTo(featureGroup);
-        }
-
-        if (featureGroup.getLayers().length > 0) {
-            map.fitBounds(featureGroup.getBounds(), { padding: [20,20], maxZoom: 10 });
-        }
+    const ventasPorClienteMap = new Map();
+    for (const [cliId, ventas] of ventasPorCliente.entries()) {
+        const total = ventas.reduce((sum, v) => sum + v.total, 0);
+        if (total > 0) ventasPorClienteMap.set(cliId, total);
     }
+
+    for (const cliId of clientIds) {
+        const cliente = clientesMap.get(cliId);
+        if (!cliente) continue;
+        
+        let coords = null;
+        
+        // 1️⃣ Intentar usar lat/lon reales
+        if (cliente.lat !== null && cliente.lon !== null && !isNaN(cliente.lat) && !isNaN(cliente.lon)) {
+            coords = [cliente.lat, cliente.lon];
+        } 
+        // 2️⃣ Fallback a ciudad basada en texto de ubicación
+        else {
+            const ubic = normalizeText(cliente.ubicacion);
+            coords = cityCoords['LIMA']; // default
+            for (const [city, coord] of Object.entries(cityCoords)) {
+                if (ubic.includes(city)) {
+                    coords = coord;
+                    break;
+                }
+            }
+            // Pequeño offset aleatorio solo cuando usamos ciudad (para separar)
+            coords = [coords[0] + (Math.sin(cliId.charCodeAt(0)) * 0.03), 
+                      coords[1] + (Math.cos(cliId.charCodeAt(cliId.length-1)) * 0.03)];
+        }
+        
+        const totalVentas = ventasPorClienteMap.get(cliId) || 0;
+        const color = totalVentas > 0 ? '#34a853' : '#ea4335';
+        
+        const marker = L.marker(coords, {
+            icon: L.divIcon({ 
+                html: `<div style="background:${color};width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.4);"></div>`, 
+                className: 'custom-pin' 
+            })
+        }).bindPopup(`<b>${cliente.razon || 'Cliente'}</b><br>Facturación: S/ ${totalVentas.toLocaleString()}<br><small>${cliente.ubicacion}</small>`);
+        
+        marker.addTo(featureGroup);
+    }
+
+    if (featureGroup.getLayers().length > 0) {
+        map.fitBounds(featureGroup.getBounds(), { padding: [20,20], maxZoom: 10 });
+    }
+}
 
     // --- Módulos de vista ---
     function loadGeneralModule() {
