@@ -18,15 +18,12 @@
     document.addEventListener('contextmenu', e => e.preventDefault());
 
     document.addEventListener('keydown', function(e) {
-
         if (
             e.key === 'F12' ||
             (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key.toUpperCase())) ||
             (e.ctrlKey && ['U', 'S'].includes(e.key.toUpperCase()))
         ) {
-
             e.preventDefault();
-
             return false;
         }
     });
@@ -131,7 +128,6 @@
         const month = String(hoy.getMonth() + 1).padStart(2, '0');
         const mesActual = `${year}-${month}`;
         inputMes.value = mesActual;
-        // Aplicar el filtro automáticamente al cargar
         aplicarFiltroMes(mesActual);
     }
 
@@ -141,11 +137,9 @@
         globalEndDate = end;
         normalizeAllData();
         
-        // Recargar vista actual
         const activeModuloLi = document.querySelector('#listaModulos li.active');
         window.cambiarModulo(currentModule, activeModuloLi);
         
-        // Si estamos en búsqueda y hay un cliente seleccionado, refrescar su ficha
         const currentIdCliente = document.getElementById('detalleDocCliente').dataset.id;
         if (currentModule === 'busqueda' && currentIdCliente) {
             mostrarDetalleCliente(currentIdCliente);
@@ -216,9 +210,7 @@
                 producto: findColumn(data.productosRaw[0], ['NOMBRE DEL PRODUCTO', 'PRODUCTO']),
                 unid: findColumn(data.productosRaw[0], ['CANTIDAD UNID', 'UNID']),
                 caja: findColumn(data.productosRaw[0], ['CANTIDAD CAJA', 'CAJA']),
-                fecha: findColumn(data.productosRaw[0], ['FECHA DE VENTA', 'FECHA', 'FECHA_EMISION', 'FECHA EMISION']),
-                lat: findColumn(data.clientesRaw[0], ['LATITUD', 'LAT', 'LATITUDE']),
-                lon: findColumn(data.clientesRaw[0], ['LONGITUD', 'LON', 'LONGITUDE', 'LNG'])
+                fecha: findColumn(data.productosRaw[0], ['FECHA DE VENTA', 'FECHA', 'FECHA_EMISION', 'FECHA EMISION'])
             };
         }
         if (data.clientesRaw.length) {
@@ -228,7 +220,10 @@
                 razon: findColumn(data.clientesRaw[0], ['RAZÓN SOCIAL', 'RAZON SOCIAL', 'NOMBRE']),
                 ubicacion: findColumn(data.clientesRaw[0], ['UBICACIÓN', 'UBICACION', 'DIRECCION']),
                 idVendedor: findColumn(data.clientesRaw[0], ['ID_VENDEDOR']),
-                estado: findColumn(data.clientesRaw[0], ['ESTADO DE VENTA', 'ESTADO'])
+                estado: findColumn(data.clientesRaw[0], ['ESTADO DE VENTA', 'ESTADO']),
+                // ✅ CORREGIDO: latitud y longitud pertenecen a clientes
+                lat: findColumn(data.clientesRaw[0], ['LATITUD', 'LAT', 'LATITUDE']),
+                lon: findColumn(data.clientesRaw[0], ['LONGITUD', 'LON', 'LONGITUDE', 'LNG'])
             };
         }
     }
@@ -263,35 +258,41 @@
             const ubicacion = row[cols.clientes.ubicacion] || '';
             const idVendedor = normalizeText(row[cols.clientes.idVendedor]);
             const estado = normalizeText(row[cols.clientes.estado]);
-            // 👇 Leer coordenadas (convertir a número, validar)
-    let lat = null, lon = null;
-    if (cols.clientes.lat && cols.clientes.lon) {
-        const rawLat = parseFloat(row[cols.clientes.lat]);
-        const rawLon = parseFloat(row[cols.clientes.lon]);
-        if (!isNaN(rawLat) && !isNaN(rawLon) && rawLat >= -90 && rawLat <= 90 && rawLon >= -180 && rawLon <= 180) {
-            lat = rawLat;
-            lon = rawLon;
+            
+            // ✅ Leer coordenadas (convertir a número, validar)
+            let lat = null, lon = null;
+            if (cols.clientes.lat && cols.clientes.lon) {
+                const rawLat = parseFloat(row[cols.clientes.lat]);
+                const rawLon = parseFloat(row[cols.clientes.lon]);
+                if (!isNaN(rawLat) && !isNaN(rawLon) && rawLat >= -90 && rawLat <= 90 && rawLon >= -180 && rawLon <= 180) {
+                    lat = rawLat;
+                    lon = rawLon;
+                }
+            }
+
+            clientesMap.set(id, { 
+                id, documento, razon, ubicacion, idVendedor, estado,
+                lat, lon
+            });
+
+            if (idVendedor) {
+                if (!clientesPorVendedor.has(idVendedor)) clientesPorVendedor.set(idVendedor, []);
+                clientesPorVendedor.get(idVendedor).push(id);
+            }
         }
-    }
 
-    clientesMap.set(id, { 
-        id, documento, razon, ubicacion, idVendedor, estado,
-        lat, lon   // ← agregado
-    });
+        // ✅ CORREGIDO: Construir mapa de documento a ID de cliente para poder vincular ventas sin ID_CLIENTE
+        const docToId = new Map();
+        for (const [id, cli] of clientesMap.entries()) {
+            if (cli.documento) docToId.set(normalizeText(cli.documento), id);
+        }
 
-    if (idVendedor) {
-        if (!clientesPorVendedor.has(idVendedor)) clientesPorVendedor.set(idVendedor, []);
-        clientesPorVendedor.get(idVendedor).push(id);
-    }
-}
-
-        // 3. Ventas con Filtro de Fechas (globalStartDate/globalEndDate)
+        // 3. Ventas con Filtro de Fechas
         let maxDate = null;
         for (const row of data.ventasRaw) {
             const fechaRaw = row[cols.ventas.fecha];
             const fechaObj = parseDateStrict(fechaRaw);
 
-            // APLICAR FILTRO GLOBAL (mes)
             if (globalStartDate || globalEndDate) {
                 if (!fechaObj) continue;
                 if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
@@ -338,7 +339,6 @@
             const fechaRawProd = cols.productos.fecha ? row[cols.productos.fecha] : null;
             let fechaObj = parseDateStrict(fechaRawProd);
 
-            // APLICAR FILTRO GLOBAL
             if (globalStartDate || globalEndDate) {
                 if (!fechaObj) continue;
                 if (globalStartDate && fechaObj.fullDate < globalStartDate) continue;
@@ -375,7 +375,6 @@
         if (mesValue) {
             aplicarFiltroMes(mesValue);
         } else {
-            // Si no hay mes seleccionado, limpiamos filtros
             globalStartDate = null;
             globalEndDate = null;
             normalizeAllData();
@@ -417,76 +416,72 @@
         }
     }
 
+    // ✅ renderMap mejorado: prioriza coordenadas reales, fallback a ciudad + offset
     function renderMap(containerId, clientIds) {
-    destroyMap(containerId);
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    const map = L.map(containerId).setView([-9.1899, -75.0151], 5);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: 'Dialex System'
-    }).addTo(map);
-    mapInstances[containerId] = map;
+        destroyMap(containerId);
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        const map = L.map(containerId).setView([-9.1899, -75.0151], 5);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: 'Dialex System'
+        }).addTo(map);
+        mapInstances[containerId] = map;
 
-    const featureGroup = L.featureGroup().addTo(map);
-    
-    // Diccionario de respaldo por ciudad (sin offsets)
-    const cityCoords = {
-        'AREQUIPA': [-16.3988, -71.5369], 'CUSCO': [-13.5319, -71.9675],
-        'TRUJILLO': [-8.1084, -79.0288], 'CHICLAYO': [-6.7714, -79.8409],
-        'PIURA': [-5.1945, -80.6328], 'IQUITOS': [-3.7491, -73.2538],
-        'HUANCAYO': [-12.0651, -75.2049], 'TACNA': [-18.0147, -70.2488],
-        'CAJAMARCA': [-7.1565, -78.5173], 'PUNO': [-15.8402, -70.0219],
-        'LIMA': [-12.0464, -77.0428]
-    };
-
-    const ventasPorClienteMap = new Map();
-    for (const [cliId, ventas] of ventasPorCliente.entries()) {
-        const total = ventas.reduce((sum, v) => sum + v.total, 0);
-        if (total > 0) ventasPorClienteMap.set(cliId, total);
-    }
-
-    for (const cliId of clientIds) {
-        const cliente = clientesMap.get(cliId);
-        if (!cliente) continue;
+        const featureGroup = L.featureGroup().addTo(map);
         
-        let coords = null;
-        
-        // 1️⃣ Intentar usar lat/lon reales
-        if (cliente.lat !== null && cliente.lon !== null && !isNaN(cliente.lat) && !isNaN(cliente.lon)) {
-            coords = [cliente.lat, cliente.lon];
-        } 
-        // 2️⃣ Fallback a ciudad basada en texto de ubicación
-        else {
-            const ubic = normalizeText(cliente.ubicacion);
-            coords = cityCoords['LIMA']; // default
-            for (const [city, coord] of Object.entries(cityCoords)) {
-                if (ubic.includes(city)) {
-                    coords = coord;
-                    break;
-                }
-            }
-            // Pequeño offset aleatorio solo cuando usamos ciudad (para separar)
-            coords = [coords[0] + (Math.sin(cliId.charCodeAt(0)) * 0.03), 
-                      coords[1] + (Math.cos(cliId.charCodeAt(cliId.length-1)) * 0.03)];
+        const cityCoords = {
+            'AREQUIPA': [-16.3988, -71.5369], 'CUSCO': [-13.5319, -71.9675],
+            'TRUJILLO': [-8.1084, -79.0288], 'CHICLAYO': [-6.7714, -79.8409],
+            'PIURA': [-5.1945, -80.6328], 'IQUITOS': [-3.7491, -73.2538],
+            'HUANCAYO': [-12.0651, -75.2049], 'TACNA': [-18.0147, -70.2488],
+            'CAJAMARCA': [-7.1565, -78.5173], 'PUNO': [-15.8402, -70.0219],
+            'LIMA': [-12.0464, -77.0428]
+        };
+
+        const ventasPorClienteMap = new Map();
+        for (const [cliId, ventas] of ventasPorCliente.entries()) {
+            const total = ventas.reduce((sum, v) => sum + v.total, 0);
+            if (total > 0) ventasPorClienteMap.set(cliId, total);
         }
-        
-        const totalVentas = ventasPorClienteMap.get(cliId) || 0;
-        const color = totalVentas > 0 ? '#34a853' : '#ea4335';
-        
-        const marker = L.marker(coords, {
-            icon: L.divIcon({ 
-                html: `<div style="background:${color};width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.4);"></div>`, 
-                className: 'custom-pin' 
-            })
-        }).bindPopup(`<b>${cliente.razon || 'Cliente'}</b><br>Facturación: S/ ${totalVentas.toLocaleString()}<br><small>${cliente.ubicacion}</small>`);
-        
-        marker.addTo(featureGroup);
-    }
 
-    if (featureGroup.getLayers().length > 0) {
-        map.fitBounds(featureGroup.getBounds(), { padding: [20,20], maxZoom: 10 });
+        for (const cliId of clientIds) {
+            const cliente = clientesMap.get(cliId);
+            if (!cliente) continue;
+            
+            let coords = null;
+            
+            if (cliente.lat !== null && cliente.lon !== null && !isNaN(cliente.lat) && !isNaN(cliente.lon)) {
+                coords = [cliente.lat, cliente.lon];
+            } else {
+                const ubic = normalizeText(cliente.ubicacion);
+                coords = cityCoords['LIMA'];
+                for (const [city, coord] of Object.entries(cityCoords)) {
+                    if (ubic.includes(city)) {
+                        coords = coord;
+                        break;
+                    }
+                }
+                coords = [coords[0] + (Math.sin(cliId.charCodeAt(0)) * 0.03), 
+                          coords[1] + (Math.cos(cliId.charCodeAt(cliId.length-1)) * 0.03)];
+            }
+            
+            const totalVentas = ventasPorClienteMap.get(cliId) || 0;
+            const color = totalVentas > 0 ? '#34a853' : '#ea4335';
+            
+            const marker = L.marker(coords, {
+                icon: L.divIcon({ 
+                    html: `<div style="background:${color};width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.4);"></div>`, 
+                    className: 'custom-pin' 
+                })
+            }).bindPopup(`<b>${cliente.razon || 'Cliente'}</b><br>Facturación: S/ ${totalVentas.toLocaleString()}<br><small>${cliente.ubicacion}</small>`);
+            
+            marker.addTo(featureGroup);
+        }
+
+        if (featureGroup.getLayers().length > 0) {
+            map.fitBounds(featureGroup.getBounds(), { padding: [20,20], maxZoom: 10 });
+        }
     }
-}
 
     // --- Módulos de vista ---
     function loadGeneralModule() {
@@ -693,48 +688,41 @@
         renderMap('ContenedorMapaSituacion', activeClientIds);
     }
 
-    // --- Exportar tabla ABC a PDF (versión mejorada y estable) ---
+    // --- Exportar tabla ABC a PDF ---
     window.exportarTablaABC = async function() {
         const tablaOriginal = document.querySelector('#tablaABC');
         if (!tablaOriginal) {
             alert('No se encontró la tabla para exportar.');
             return;
         }
-
-        // Verificar que las librerías existen
         if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
             alert('Las librerías para generar PDF no se cargaron correctamente. Recarga la página.');
             return;
         }
 
-        // Mostrar indicador de carga (opcional)
         const btn = document.querySelector('.btn-export-pdf');
         const textoOriginal = btn.innerHTML;
         btn.innerHTML = '⏳ Generando PDF...';
         btn.disabled = true;
 
         try {
-            // Clonar profundamente la tabla y su contenedor con estilos calculados
             const cloneTabla = tablaOriginal.cloneNode(true);
-            // Eliminar eventos y estilos interactivos que puedan interferir
             const filas = cloneTabla.querySelectorAll('tbody tr');
             filas.forEach(fila => {
                 fila.removeAttribute('onclick');
                 fila.style.cursor = 'default';
             });
             
-            // Crear un contenedor temporal con dimensiones fijas de escritorio
             const container = document.createElement('div');
             container.style.position = 'fixed';
             container.style.left = '-10000px';
             container.style.top = '0';
-            container.style.width = '1200px'; // ancho estándar PC
+            container.style.width = '1200px';
             container.style.backgroundColor = 'white';
             container.style.padding = '20px';
             container.style.fontFamily = "'Segoe UI', Arial, sans-serif";
             container.style.zIndex = '-1';
             
-            // Añadir título
             const titulo = document.createElement('h2');
             titulo.textContent = 'Segmentación ABC Dinámica de Clientes (Pareto 80/20)';
             titulo.style.color = '#1a73e8';
@@ -742,7 +730,6 @@
             titulo.style.fontSize = '18px';
             container.appendChild(titulo);
             
-            // Aplicar estilos inline a la tabla clonada para asegurar consistencia
             cloneTabla.style.width = '100%';
             cloneTabla.style.borderCollapse = 'collapse';
             cloneTabla.style.fontSize = '12px';
@@ -759,7 +746,6 @@
                 td.style.padding = '8px 10px';
                 td.style.borderBottom = '1px solid #eee';
             });
-            // Mantener badges
             const badges = cloneTabla.querySelectorAll('.badge');
             badges.forEach(b => {
                 if (b.classList.contains('badge-a')) b.style.backgroundColor = '#e6f4ea';
@@ -774,11 +760,8 @@
             
             container.appendChild(cloneTabla);
             document.body.appendChild(container);
-            
-            // Esperar un frame para que el navegador renderice
             await new Promise(resolve => setTimeout(resolve, 100));
             
-            // Capturar con html2canvas
             const canvas = await html2canvas(container, {
                 scale: 2,
                 backgroundColor: '#ffffff',
@@ -790,13 +773,12 @@
             
             const imgData = canvas.toDataURL('image/png');
             const { jsPDF } = window.jspdf;
-            // PDF en orientación horizontal (landscape)
             const pdf = new jsPDF({
                 orientation: 'landscape',
                 unit: 'mm',
                 format: 'a4'
             });
-            const imgWidth = 280; // mm (A4 landscape = 297mm, dejamos márgenes)
+            const imgWidth = 280;
             const imgHeight = (canvas.height * imgWidth) / canvas.width;
             pdf.addImage(imgData, 'PNG', 8, 8, imgWidth, imgHeight);
             pdf.save('segmentacion_abc_clientes.pdf');
@@ -805,10 +787,8 @@
             console.error('Error detallado al generar PDF:', error);
             alert('Ocurrió un error al generar el PDF. Detalle: ' + error.message);
         } finally {
-            // Limpiar el contenedor temporal
             const tempContainer = document.body.querySelector('div[style*="left: -10000px"]');
             if (tempContainer) tempContainer.remove();
-            // Restaurar botón
             btn.innerHTML = textoOriginal;
             btn.disabled = false;
         }
@@ -876,10 +856,10 @@
             const shown = results.slice(0, 15);
             let html = '';
             for (const r of shown) {
-                const total = (ventasPorCliente.get(r.id) || []).reduce((s, v) => s + v.total, 0);
+                const totalComprado = (ventasPorCliente.get(r.id) || []).reduce((s, v) => s + v.total, 0);
                 html += `<li onclick="window.seleccionarSugerencia('${r.id}', '${(r.doc||'').replace(/'/g,"\\'")}', '${(r.razon||'').replace(/'/g,"\\'")}')">
                     <strong>${r.razon || 'Sin Razón Social'}</strong>
-                    <small>Doc: ${r.doc || '---'} &nbsp;|&nbsp; Comprado: ${formatCurrency(total)}</small>
+                    <small>Doc: ${r.doc || '---'} &nbsp;|&nbsp; Comprado: ${formatCurrency(totalComprado)}</small>
                 </li>`;
             }
 
@@ -966,14 +946,11 @@
         
         for (const p of productos) {
             if (!p.producto) continue;
-            
             if (dateStringFilter) {
                 if (!p.fechaObj || p.fechaObj.string !== dateStringFilter) continue;
             }
-            
             const actualUnid = p.unid || 0;
             const actualCaja = p.caja || 0;
-            
             if (!prodMap.has(p.producto)) {
                 prodMap.set(p.producto, { unid: 0, caja: 0 });
             }
@@ -1104,7 +1081,6 @@
             buildFuseIndex();
             generateVendedoresMenu();
             const activeModuloLi = document.querySelector('#listaModulos li.active');
-            const activeModulo = activeModuloLi ? activeModuloLi.textContent.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace('general','general').replace('productividad','productividad').replace('situacion','situacion').replace('busqueda','busqueda') : 'general';
             window.cambiarModulo(currentModule, activeModuloLi);
             icono.textContent = '✓'; icono.style.animation = 'none';
             setTimeout(() => { icono.textContent = '↻'; }, 2000);
@@ -1180,172 +1156,111 @@
         }, 100);
     };
 
-function generateVendedoresMenu() {
-    const lista = document.getElementById('listaVendedoresHorizontal');
-    lista.innerHTML = '';
+    function generateVendedoresMenu() {
+        const lista = document.getElementById('listaVendedoresHorizontal');
+        lista.innerHTML = '';
 
-    const vendedoresOrdenados = Array.from(vendedoresMap.values())
-        .filter(v => v.meta > 0 && !v.nombreCompleto.includes('RETIRADO'));
+        const vendedoresOrdenados = Array.from(vendedoresMap.values())
+            .filter(v => v.meta > 0 && !v.nombreCompleto.includes('RETIRADO'));
 
-    for (const v of vendedoresOrdenados) {
-        const li = document.createElement('li');
-
-        li.textContent = v.nombreCompleto;
-
-        li.onclick = () => {
-            document.querySelectorAll('#listaVendedoresHorizontal li')
-                .forEach(el => el.classList.remove('active'));
-
-            li.classList.add('active');
-
-            currentVendedor = v;
-
-            document.getElementById('estadoVendedorSeleccion').style.display = 'none';
-            document.getElementById('contenidoProductividad').style.display = 'block';
-
-            loadProductividadModule(v);
-        };
-
-        lista.appendChild(li);
+        for (const v of vendedoresOrdenados) {
+            const li = document.createElement('li');
+            li.textContent = v.nombreCompleto;
+            li.onclick = () => {
+                document.querySelectorAll('#listaVendedoresHorizontal li').forEach(el => el.classList.remove('active'));
+                li.classList.add('active');
+                currentVendedor = v;
+                document.getElementById('estadoVendedorSeleccion').style.display = 'none';
+                document.getElementById('contenidoProductividad').style.display = 'block';
+                loadProductividadModule(v);
+            };
+            lista.appendChild(li);
+        }
     }
-}
 
-async function inicializarApp() {
-    try {
+    async function inicializarApp() {
+        try {
+            const [vendedores, ventas, productos, clientes] = await Promise.all([
+                loadCSV(urls.vendedores),
+                loadCSV(urls.ventas),
+                loadCSV(urls.productos),
+                loadCSV(urls.clientes)
+            ]);
 
-        const [vendedores, ventas, productos, clientes] = await Promise.all([
-            loadCSV(urls.vendedores),
-            loadCSV(urls.ventas),
-            loadCSV(urls.productos),
-            loadCSV(urls.clientes)
-        ]);
+            data.vendedoresRaw = vendedores;
+            data.ventasRaw = ventas;
+            data.productosRaw = productos;
+            data.clientesRaw = clientes;
 
-        data.vendedoresRaw = vendedores;
-        data.ventasRaw = ventas;
-        data.productosRaw = productos;
-        data.clientesRaw = clientes;
+            initColumns();
+            initMonthFilter();
+            buildFuseIndex();
+            generateVendedoresMenu();
 
-        initColumns();
+            const activeModuloLi = document.querySelector('#listaModulos li.active');
+            window.cambiarModulo('general', activeModuloLi);
 
-        // Inicializar filtro por mes actual
-        initMonthFilter();
-
-        buildFuseIndex();
-
-        generateVendedoresMenu();
-
-        const activeModuloLi = document.querySelector('#listaModulos li.active');
-
-        window.cambiarModulo('general', activeModuloLi);
-
-        setTimeout(() => {
-
-            document.getElementById('loadingScreen').style.display = 'none';
-
-            document.getElementById('appContainer').style.visibility = 'visible';
-
-            for (const id in charts) {
-                if (charts[id] && charts[id].resize) {
-                    charts[id].resize();
+            setTimeout(() => {
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('appContainer').style.visibility = 'visible';
+                for (const id in charts) {
+                    if (charts[id] && charts[id].resize) {
+                        charts[id].resize();
+                    }
                 }
-            }
+            }, 600);
 
-        }, 600);
-
-    } catch (err) {
-
-        console.error(err);
-
-        document.getElementById('loadingSpinner').style.display = 'none';
-
-        document.getElementById('loadingTitle').textContent =
-            'Error de conexión. Verifique los enlaces de los CSV.';
-
-        document.getElementById('loadingTitle').style.color = '#d93025';
+        } catch (err) {
+            console.error(err);
+            document.getElementById('loadingSpinner').style.display = 'none';
+            document.getElementById('loadingTitle').textContent = 'Error de conexión. Verifique los enlaces de los CSV.';
+            document.getElementById('loadingTitle').style.color = '#d93025';
+        }
     }
-}
 
-
-// ===========================
-// HASH PASSWORD
-// ===========================
-
-async function hashPassword(text) {
-
-    const encoder = new TextEncoder();
-
-    const data = encoder.encode(text);
-
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-
-    return hashArray
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-}
-
-
-// ===========================
-// LOGIN
-// ===========================
-
-window.verificarPassword = async function() {
-
-    const inputPass = document.getElementById('passInput').value;
-
-    // 
-    const passwordHash =
-        '841366dd134c264fe37e1cf5d237ab533bb24e0dfd7fcf1723ecfdad135f416b';
-
-    const inputHash = await hashPassword(inputPass);
-
-    if (inputHash === passwordHash) {
-
-        document.getElementById('loginError').style.display = 'none';
-
-        document.getElementById('loginScreen').style.opacity = '0';
-
-        setTimeout(() => {
-
-            document.getElementById('loginScreen').style.display = 'none';
-
-            document.getElementById('loadingScreen').style.display = 'flex';
-
-            inicializarApp();
-
-        }, 300);
-
-    } else {
-
-        document.getElementById('loginError').style.display = 'block';
+    // ===========================
+    // HASH PASSWORD
+    // ===========================
+    async function hashPassword(text) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(text);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     }
-};
 
+    // ===========================
+    // LOGIN
+    // ===========================
+    window.verificarPassword = async function() {
+        const inputPass = document.getElementById('passInput').value;
+        const passwordHash = '841366dd134c264fe37e1cf5d237ab533bb24e0dfd7fcf1723ecfdad135f416b';
+        const inputHash = await hashPassword(inputPass);
+        if (inputHash === passwordHash) {
+            document.getElementById('loginError').style.display = 'none';
+            document.getElementById('loginScreen').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('loadingScreen').style.display = 'flex';
+                inicializarApp();
+            }, 300);
+        } else {
+            document.getElementById('loginError').style.display = 'block';
+        }
+    };
 
-window.evaluarTeclado = function(e) {
+    window.evaluarTeclado = function(e) {
+        if (e.key === 'Enter') {
+            window.verificarPassword();
+        }
+    };
 
-    if (e.key === 'Enter') {
-        window.verificarPassword();
-    }
-};
-
-
-document.addEventListener('click', function(e) {
-
-    const list = document.getElementById('listaSugerenciasClientes');
-
-    const input = document.getElementById('inputBusquedaCliente');
-
-    if (
-        list &&
-        input &&
-        e.target !== input &&
-        e.target !== list &&
-        !list.contains(e.target)
-    ) {
-        list.style.display = 'none';
-    }
-});
+    document.addEventListener('click', function(e) {
+        const list = document.getElementById('listaSugerenciasClientes');
+        const input = document.getElementById('inputBusquedaCliente');
+        if (list && input && e.target !== input && e.target !== list && !list.contains(e.target)) {
+            list.style.display = 'none';
+        }
+    });
 
 })();
